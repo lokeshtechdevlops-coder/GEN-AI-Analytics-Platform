@@ -71,3 +71,49 @@ def generate_graph(req: GraphRequest):
                          message="Rendered from deterministic DataFrame results", query_plan=plan,
                          records_matched=result.records_matched, records_in_source=result.records_total)
 
+
+class PythonGraphAgentRequest(BaseModel):
+    prompt: Optional[str] = None
+    query_plan: Optional[Dict[str, Any]] = None
+    metric: Optional[str] = None
+    dimension: Optional[str] = None
+    chart_type: Optional[str] = None
+    aggregation: Optional[str] = "SUM"
+
+
+@router.post("/python-agent/generate")
+def generate_python_graph_agent(req: PythonGraphAgentRequest):
+    """
+    Executes the full 10-step PythonGraphAgent workflow.
+    Supports natural language prompt (Mode 2) OR structured data options without prompt (Mode 3).
+    """
+    from api.services.python_graph_agent import python_graph_agent
+
+    prompt = req.prompt
+    plan = dict(req.query_plan) if req.query_plan else {}
+
+    if req.metric:
+        plan["metric"] = req.metric
+    if req.dimension:
+        plan["dimension"] = req.dimension
+    if req.chart_type:
+        plan["chart_type"] = req.chart_type
+    if req.aggregation:
+        plan["aggregation"] = req.aggregation
+
+    if not prompt:
+        metric_name = req.metric or "Revenue"
+        dim_name = req.dimension or "Region"
+        chart_name = req.chart_type or "bar"
+        prompt = f"Generate a {chart_name} chart of {req.aggregation or 'total'} {metric_name} by {dim_name}"
+
+    try:
+        result = python_graph_agent.generate_custom_graph(
+            prompt=prompt,
+            query_plan=plan if plan else None
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Custom graph generation failed: {str(e)}")
+
+

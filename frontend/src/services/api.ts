@@ -50,6 +50,7 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     if (status === 401) return 'Your SAP session has expired or is invalid. Sign out and sign in again.';
     if (status === 403) return 'Your SAP account does not have permission for this operation. Check its project role collections.';
     if (status === 404) return 'The requested API or chat session was not found. Check the backend and application router destination.';
+    if (status === 500) return 'The analytical engine could not execute this query on the active dataset schema. Please rephrase your natural language question or try structured query mode.';
     if (status === 502 || status === 503 || status === 504) return 'The backend or SAP service is unavailable. Check the backend connection and retry.';
     if (!error.response) return 'The API could not be reached. Check your connection and that the backend is running.';
   }

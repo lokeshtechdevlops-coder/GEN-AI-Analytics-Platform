@@ -110,6 +110,10 @@ export default function App() {
   );
 
   const handleNavigate = (path: string) => {
+    if (path === 'enterprise-signin' || path === 'logout') {
+      handleLogout();
+      return;
+    }
     if (path === 'system-management' || path.startsWith('system-settings/')) {
       setSystemTab(path.endsWith('/connections') ? 'Connections' : 'Sync Jobs');
       path = 'system-settings';
@@ -121,16 +125,18 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
     clearLocalIdentity(true);
     setIsAuthenticated(false);
     setCurrentUser(null);
     setHasOpenedChat(false);
     setActivePath('enterprise-signin');
     setSidebarOpen(false);
-    // Always end the deployed router session, including credential sign-ins
-    // made while an older router cookie was still present.
+    // Only redirect if an external AppRouter URL is explicitly configured
     const logoutTarget = sapRouterRoute('/logout');
-    if (logoutTarget) window.location.replace(logoutTarget);
+    if (logoutTarget && logoutTarget.startsWith('http')) {
+      window.location.replace(logoutTarget);
+    }
   };
 
   useEffect(() => {
@@ -205,6 +211,8 @@ export default function App() {
         onNavigate={handleNavigate}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        user={currentUser}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area - Fluidly & Automatically Determined for Every Screen & Aspect Ratio */}

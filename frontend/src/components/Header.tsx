@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { NeovaticLogo } from './NeovaticLogo';
-import { fetchHealthStatus } from '../services/healthService';
-import { selectedContext } from '../services/executionContext';
-import { getDatasets } from '../services/datasetService';
 
 interface HeaderProps {
   onOpenCommandPalette: () => void;
@@ -26,57 +23,15 @@ export const Header: React.FC<HeaderProps> = ({
   user,
 }) => {
   const [profileOpen, setProfileOpen] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [healthStatus, setHealthStatus] = useState<string | null>(null);
-  const [activeDatasetName, setActiveDatasetName] = useState<string | null>(null);
-  const [activeVersion, setActiveVersion] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const updateActive = async () => {
-      const ctx = selectedContext();
-      if (!ctx) {
-        setActiveDatasetName(null);
-        setActiveVersion(null);
-        return;
-      }
-      setActiveVersion(ctx.version);
-      try {
-        const list = await getDatasets();
-        if (cancelled) return;
-        const found = list.find(d => d.id === ctx.datasetId);
-        if (found) setActiveDatasetName(found.name);
-      } catch {
-        // Soft fallback
-      }
-    };
-    void updateActive();
-    window.addEventListener('dataset-context-changed', updateActive);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('dataset-context-changed', updateActive);
-    };
-  }, []);
-
-  const handleGlobalSync = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetchHealthStatus();
-      setHealthStatus(`HANA: ${res.hana_connected ? 'OK' : 'Disconnected'} · AI Core: ${res.ai_core_connected == null ? 'Not checked' : res.ai_core_connected ? 'OK' : 'Disconnected'}`);
-    } catch {
-      setHealthStatus('HANA / AI Core: Connection Pending');
-    } finally {
-      setTimeout(() => {
-        setSyncing(false);
-      }, 600);
-    }
-  };
 
   const rolesList = user?.roles || [];
   const isAdmin = rolesList.includes('Admin');
   const isMember = rolesList.includes('Member');
   const roleLabel = isAdmin ? 'Admin' : (isMember ? 'Member' : 'User');
   const roleSubtitle = isAdmin ? 'Administrator' : (isMember ? 'Member' : 'Standard User');
+
+  const isHomeActive = activePath === 'executive-dashboard';
+  const isAlertsActive = activePath === 'alerts-notifications';
 
   return (
     <header className="fixed top-0 left-0 right-0 h-[60px] sm:h-[72px] z-50 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] flex items-center justify-between px-2.5 sm:px-4 md:px-margin select-none">
@@ -112,7 +67,7 @@ export const Header: React.FC<HeaderProps> = ({
           <input
             readOnly
             value=""
-            placeholder="Quick jump (e.g., 'Custom Graphs', 'RAG Chat')..."
+            placeholder="Quick jump to pages or graphs..."
             className="w-full h-9 pl-9 pr-14 rounded-xl bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#0F172A] placeholder:text-[#64748B] font-body-sm text-body-sm border border-[#E2E8F0] focus:border-[#2563EB] transition-colors cursor-pointer"
             type="text"
           />
@@ -122,67 +77,50 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Mobile Search Icon + Status Indicators + User Profile */}
-      <div className="flex items-center gap-1.5 sm:gap-space-sm shrink-0">
+      {/* Right: Actions + User Profile */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* Search icon trigger on mobile */}
         <button
           onClick={onOpenCommandPalette}
           aria-label="Search and command palette"
-          className="md:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full hover:bg-[#F1F5F9] text-[#0F172A] transition-colors"
+          className="md:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] transition-colors"
         >
           <span className="material-symbols-outlined text-[19px]">search</span>
         </button>
 
-        {/* Active Dataset Context Badge */}
-        {activeDatasetName && (
-          <button
-            type="button"
-            onClick={() => onNavigate('upload-dataset')}
-            title={`Active Dataset: ${activeDatasetName} (Version ${activeVersion || 1}) · Click to open dataset management`}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50/90 hover:bg-blue-100 border border-blue-200 text-blue-700 transition-colors cursor-pointer text-left"
-          >
-            <span className="material-symbols-outlined text-[16px] text-blue-600">database</span>
-            <span className="font-label-sm text-label-sm font-medium max-w-[120px] md:max-w-[170px] truncate text-slate-800">
-              {activeDatasetName}
-            </span>
-            <span className="bg-blue-600 text-white font-mono px-1.5 py-0.2 rounded text-[10px] font-semibold">
-              v{activeVersion || 1}
-            </span>
-          </button>
-        )}
+        {/* Home Navigation Icon */}
+        <button
+          type="button"
+          onClick={() => onNavigate('executive-dashboard')}
+          title="Home"
+          aria-label="Home"
+          className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${
+            isHomeActive
+              ? 'bg-[#EFF6FF] text-[#2563EB] shadow-2xs border border-[#BFDBFE]/80 font-medium'
+              : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] border border-transparent'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px] sm:text-[22px]">home</span>
+        </button>
 
-        {/* Live Cluster Indicators on Desktop & Tablet */}
-        <div className="hidden xl:flex items-center gap-space-sm">
-          {/* HANA Vector Pill */}
-          <div
-            onClick={handleGlobalSync}
-            title="Click to ping SAP HANA in-memory vector store"
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F0FDFA] border border-[#CCFBF1] text-[#0F766E] hover:bg-[#CCFBF1]/50 transition-colors cursor-pointer"
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${syncing ? 'bg-[#2563EB] animate-ping' : 'bg-[#0F766E]'}`}></span>
-            <span className="font-label-sm text-label-sm font-medium">
-              {syncing ? 'HANA Vector: SYNCING...' : (healthStatus ?? 'HANA Vector: ACTIVE')}
-            </span>
-          </div>
+        {/* Alerts & Notifications Navigation Icon */}
+        <button
+          type="button"
+          onClick={() => onNavigate('alerts-notifications')}
+          title="Alerts & Notifications"
+          aria-label="Alerts & Notifications"
+          className={`relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${
+            isAlertsActive
+              ? 'bg-[#EFF6FF] text-[#2563EB] shadow-2xs border border-[#BFDBFE]/80 font-medium'
+              : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] border border-transparent'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px] sm:text-[22px]">notifications</span>
+          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
+        </button>
 
-          {/* AI Core Pill */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F5F3FF] border border-[#DDD6FE] text-[#6D28D9]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#7C3AED]"></span>
-            <span className="font-label-sm text-label-sm font-medium">
-              AI Core: GPT-4o
-            </span>
-          </div>
-
-          {/* Health Pill */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F0FDF4] border border-[#BBF7D0] text-[#166534]">
-            <span className="material-symbols-outlined text-[14px] text-[#16A34A]">
-              check_circle
-            </span>
-            <span className="font-label-sm text-label-sm font-medium">
-              Healthy
-            </span>
-          </div>
-        </div>
+        {/* Subtle Vertical Divider */}
+        <div className="h-6 w-[1px] bg-[#E2E8F0] mx-0.5 sm:mx-1 hidden sm:block" />
 
         {/* User Profile Lockup */}
         <div className="relative">

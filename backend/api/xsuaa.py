@@ -55,6 +55,33 @@ def validate_token(token: str, credentials: dict | None = None) -> tuple:
     credentials = xsuaa_credentials() if credentials is None else credentials
     if not credentials or not credentials.get("clientid") or not credentials.get("xsappname"):
         raise HTTPException(503, "A complete project XSUAA application binding is required.")
+
+    # Local development token bypass
+    if (os.getenv("APP_ENV", "development") == "development" or not os.getenv("VCAP_APPLICATION")) and token.startswith("dev-token-"):
+        class LocalDevSecurityContext:
+            def check_local_scope(self, scope: str) -> bool:
+                return True
+            def get_logon_name(self) -> str:
+                return "admin@sap.corp"
+
+        parts = token.split(":")
+        user_email = parts[1] if len(parts) > 1 else "lokesh@neovatic.com"
+        user_name = parts[2] if len(parts) > 2 else "Lokesh Kumar (Admin)"
+        user_id = parts[3] if len(parts) > 3 else "dev-admin-user"
+
+        claims = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "email": user_email,
+            "name": user_name,
+            "given_name": user_name.split()[0] if " " in user_name else user_name,
+            "family_name": user_name.split()[-1] if " " in user_name else "",
+            "scope": [f"{credentials['xsappname']}.Admin", f"{credentials['xsappname']}.Member"],
+            "sub": user_id,
+            "zid": credentials.get("identityzoneid") or "x3xp40nc-cd8dlcr",
+            "aud": [credentials["clientid"], credentials["xsappname"]],
+        }
+        return LocalDevSecurityContext(), claims
     try:
         from sap import xssec
     except ImportError:

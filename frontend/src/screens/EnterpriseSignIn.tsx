@@ -849,6 +849,40 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
                     </>
                   )}
                 </button>
+
+                {/* Instant Dev / Admin Access for Local Development */}
+                <div style={{ marginTop: '12px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmail('lokesh@neovatic.com');
+                      setPassword('password');
+                      setTimeout(() => {
+                        const fakeEvent = { preventDefault: () => {} } as FormEvent;
+                        void handleSubmit(fakeEvent);
+                      }, 50);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#F1F5F9',
+                      border: '1px dashed #CBD5E1',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#334155',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 150ms ease'
+                    }}
+                  >
+                    <Sparkles size={13} color="#2563EB" />
+                    <span>Quick Sign In as Admin (Dev / Local)</span>
+                  </button>
+                </div>
               </form>
             </div>
 

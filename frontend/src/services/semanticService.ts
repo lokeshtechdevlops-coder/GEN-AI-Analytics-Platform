@@ -71,3 +71,34 @@ export const proposeRecommendations = async () => (await api.post<{ items: Analy
 export const saveDefinition = async (item: AnalyticsDefinition) => (await api.post<AnalyticsDefinition>('/insights/definitions', item)).data;
 export const reviewDefinition = async (item: AnalyticsDefinition, decision: 'approved' | 'rejected') =>
   (await api.post<AnalyticsDefinition>(`/insights/definitions/${item.id}/${item.revision}/review`, { decision })).data;
+
+export interface PythonGraphAgentResponse {
+  status: string;
+  prompt: string;
+  image_base64: string;
+  chart_type?: string;
+  insights?: string;
+  message: string;
+  records_matched?: number;
+  records_in_source?: number;
+  data_as_of?: string;
+  verified?: boolean;
+  query_plan?: Record<string, any>;
+}
+
+export const generatePythonGraphAgent = async (params: {
+  prompt?: string;
+  query_plan?: Record<string, any>;
+  metric?: string;
+  dimension?: string;
+  chart_type?: string;
+  aggregation?: string;
+  dataset_id?: string;
+}) => {
+  const headers: Record<string, string> = {};
+  if (params.dataset_id) {
+    headers['X-Dataset-Id'] = params.dataset_id;
+  }
+  return (await api.post<PythonGraphAgentResponse>('/graph/python-agent/generate', params, { headers })).data;
+};
+

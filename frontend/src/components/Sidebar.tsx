@@ -5,6 +5,8 @@ interface SidebarProps {
   onNavigate: (path: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  user?: { name?: string; email?: string; role?: string } | null;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -12,6 +14,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNavigate,
   isOpen,
   onClose,
+  user,
+  onLogout,
 }) => {
   const navItems = [
     {
@@ -28,13 +32,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'build-your-kpi-graph-studio',
-      label: 'Build Your KPI (Graph Studio)',
+      label: 'Build Your KPI',
       badge: 'Agent',
       icon: 'query_stats',
     },
     {
       id: 'upload-dataset',
-      label: 'Upload Dataset (Excel/CSV)',
+      label: 'Upload Dataset',
       badge: null,
       icon: 'upload_file',
     },
@@ -161,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <span className="truncate">{item.label}</span>
                   </div>
 
-                  {item.badge && (
+                    {item.badge && (
                     <span
                       className={`font-label-sm text-[10px] px-2 py-0.5 rounded-full shrink-0 font-medium ${badgeClasses}`}
                     >
@@ -172,6 +176,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })}
           </nav>
+
+          {/* User Profile & Direct Log Out Button at Bottom of Sidebar */}
+          <div className="pt-3 mt-auto border-t border-[#E2E8F0]">
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                  {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold text-slate-900 truncate">
+                    {user?.name || 'Analytics Admin'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate font-mono">
+                    {user?.email || 'admin@sap.corp'}
+                  </div>
+                </div>
+                <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                  {user?.role || 'Admin'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                if (onLogout) {
+                  onLogout();
+                } else {
+                  onNavigate('enterprise-signin');
+                }
+              }}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors text-xs font-semibold cursor-pointer border border-rose-100/80 bg-rose-50/30 hover:border-rose-200 group"
+            >
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[17px] text-rose-500 group-hover:-translate-x-0.5 transition-transform">
+                  logout
+                </span>
+                <span>Log Out</span>
+              </div>
+              <span className="text-[10px] text-rose-400 font-mono">End Session</span>
+            </button>
+          </div>
         </div>
       </aside>
     </>

@@ -39,10 +39,25 @@ export async function ensureDefaultContext(): Promise<DatasetContext | null> {
     const datasets = await getDatasets();
     if (!datasets || datasets.length === 0) return null;
     const active = datasets.find(d => d.isActive) || datasets[0];
+
+    let revision = 1;
+    try {
+      const { getSemanticModels } = await import('./semanticService');
+      const models = await getSemanticModels(active.id, active.currentVersion || 1);
+      const approved = models.filter(m => m.status === 'approved');
+      if (approved.length > 0) {
+        revision = Math.max(...approved.map(m => m.revision));
+      } else if (models.length > 0) {
+        revision = Math.max(...models.map(m => m.revision));
+      }
+    } catch {
+      revision = 1;
+    }
+
     const defaultCtx: DatasetContext = {
       datasetId: active.id,
       version: active.currentVersion || 1,
-      semanticRevision: 1,
+      semanticRevision: revision,
     };
     selectContext(defaultCtx);
     return defaultCtx;

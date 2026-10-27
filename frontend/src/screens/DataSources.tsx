@@ -6,16 +6,160 @@ import { getApiErrorMessage } from '../services/api';
 export const DataSources: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const [datasets, setDatasets] = useState<DatasetItem[]>([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
-    getDatasets().then(items => { if (!cancelled) setDatasets(items); })
-      .catch(err => { if (!cancelled) setError(getApiErrorMessage(err, 'Data sources could not be loaded.')); });
+    setLoading(true);
+    getDatasets().then(items => { if (!cancelled) { setDatasets(items); setLoading(false); } })
+      .catch(err => { if (!cancelled) { setError(getApiErrorMessage(err, 'Data sources could not be loaded.')); setLoading(false); } });
     return () => { cancelled = true; };
   }, []);
-  return <div className="space-y-5"><div className="flex flex-wrap justify-between gap-3"><div><h1 className="text-3xl font-semibold">Data Sources</h1><p className="mt-2 text-slate-500">Imported datasets available to your account.</p></div>
-    <button className="bg-blue-600 text-white rounded-xl px-4 py-2" onClick={() => onNavigate('system-settings/connections')}>Manage connections</button></div>
-    {error && <p role="alert" className="text-red-700">{error}</p>}
-    {!datasets.length && !error && <div className="bg-white border rounded-2xl p-6"><p>No imported datasets are available.</p><button className="mt-3 border rounded-lg px-4 py-2" onClick={() => onNavigate('upload-dataset')}>Upload Excel or CSV</button></div>}
-    <div className="grid sm:grid-cols-2 gap-4">{datasets.map(item => <section key={item.id} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2"><h2 className="text-lg font-semibold">{item.name}</h2><p className="text-sm text-slate-500">{item.rowCount} rows ? {item.columnCount} fields ? Version {item.currentVersion}</p><p className="text-sm">Vector index: {item.embeddingStatus || 'Not indexed'}</p><p className="text-xs text-slate-500">Updated {new Date(item.lastUpdated).toLocaleString()}</p><button className="border rounded-lg px-3 py-2 text-sm" onClick={() => onNavigate('upload-dataset')}>Open dataset workflow</button></section>)}</div>
-  </div>;
+
+  const totalRows = datasets.reduce((sum, d) => sum + (d.rowCount || 0), 0);
+  const totalColumns = datasets.reduce((sum, d) => sum + (d.columnCount || 0), 0);
+  const readyCount = datasets.filter(d => d.embeddingStatus === 'Ready').length;
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-wrap justify-between items-start gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              DATA CATALOG · ENTERPRISE SOURCES
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+            Data Sources
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Imported datasets available to your account.
+          </p>
+        </div>
+        <button
+          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2.5 text-sm font-medium shadow-sm transition-colors"
+          onClick={() => onNavigate('system-settings/connections')}
+        >
+          <span className="material-symbols-outlined text-[18px]">cable</span>
+          <span>Manage connections</span>
+        </button>
+      </div>
+
+      {/* Summary Statistics */}
+      {datasets.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Datasets', value: datasets.length, icon: 'database', color: 'blue' },
+            { label: 'Total Records', value: totalRows.toLocaleString(), icon: 'table_rows', color: 'indigo' },
+            { label: 'Schema Fields', value: totalColumns.toLocaleString(), icon: 'schema', color: 'purple' },
+            { label: 'Vector Index Ready', value: readyCount, icon: 'check_circle', color: 'emerald' },
+          ].map(stat => (
+            <div key={stat.label} className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`material-symbols-outlined text-[18px] text-${stat.color}-600`}>{stat.icon}</span>
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{stat.label}</span>
+              </div>
+              <p className="text-xl font-bold tracking-tight text-slate-900 tabular-nums">{stat.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div role="alert" className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+          <span className="material-symbols-outlined text-red-600 text-xl mt-0.5">error</span>
+          <p className="text-sm font-medium text-red-800">{error}</p>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && !error && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Loading data sources…</p>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && !datasets.length && !error && (
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-10 text-center space-y-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+            <span className="material-symbols-outlined text-slate-400 text-3xl">cloud_upload</span>
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-slate-800">No imported datasets</p>
+            <p className="text-sm text-slate-500 mt-1">Upload an Excel or CSV file to begin ingesting data.</p>
+          </div>
+          <button
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-sm font-medium shadow-sm transition-colors"
+            onClick={() => onNavigate('upload-dataset')}
+          >
+            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+            <span>Upload Excel or CSV</span>
+          </button>
+        </div>
+      )}
+
+      {/* Dataset Cards */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        {datasets.map(item => (
+          <section
+            key={item.id}
+            className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 space-y-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-md hover:border-slate-300 transition-all duration-200"
+          >
+            {/* Card Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-blue-600 text-xl">description</span>
+                  <h2 className="text-base font-semibold text-slate-900 truncate">{item.name}</h2>
+                </div>
+              </div>
+              <span className={`shrink-0 text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border ${
+                item.embeddingStatus === 'Ready'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : item.embeddingStatus === 'Indexing' || item.embeddingStatus === 'Pending'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-slate-50 text-slate-600 border-slate-200'
+              }`}>
+                {item.embeddingStatus || 'Not indexed'}
+              </span>
+            </div>
+
+            {/* Metadata */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium tabular-nums">
+                <span className="material-symbols-outlined text-[13px]">table_rows</span>
+                {item.rowCount?.toLocaleString() ?? '0'} rows
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium tabular-nums">
+                <span className="material-symbols-outlined text-[13px]">view_column</span>
+                {item.columnCount ?? '0'} fields
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium">
+                <span className="material-symbols-outlined text-[13px]">layers</span>
+                Version {item.currentVersion ?? 1}
+              </span>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <p className="text-xs text-slate-500">
+                Updated {new Date(item.lastUpdated).toLocaleString()}
+              </p>
+              <button
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 transition-colors"
+                onClick={() => onNavigate('upload-dataset')}
+              >
+                <span className="material-symbols-outlined text-[14px] text-blue-600">open_in_new</span>
+                Open dataset workflow
+              </button>
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
 };

@@ -36,25 +36,47 @@ class DatasetContextMiddleware:
                 from api.platform.ai_settings import ai_settings, current_ai_settings
                 ai_token = current_ai_settings.set(await run_in_threadpool(ai_settings))
                 from api.services.dataset_service import dataset_service
+                catalog = await run_in_threadpool(dataset_service._catalog)
                 dataset_id = headers.get("x-dataset-id")
                 if not dataset_id:
-                    raise HTTPException(409, "Select a dataset and version before requesting analytics.")
-                catalog = await run_in_threadpool(dataset_service._catalog)
+                    datasets = catalog.get("datasets", {})
+                    if datasets:
+                        active_dataset = next((d for d in datasets.values() if d.get("isActive")), next(iter(datasets.values())))
+                        dataset_id = active_dataset["id"]
+                    else:
+                        raise HTTPException(409, "Select a dataset and version before requesting analytics.")
                 entry = await run_in_threadpool(dataset_service._entry, catalog, dataset_id)
                 require_dataset_access(entry)
                 try:
                     version = int(headers.get("x-dataset-version", str(entry["currentVersion"])))
-                    revision = int(headers.get("x-semantic-revision", "1"))
+                    from api.platform.semantic import semantic_registry
+                    pinned_entry = copy.deepcopy(entry)
+                    pinned_entry["currentVersion"] = version
+                    models = await run_in_threadpool(semantic_registry.list, pinned_entry, version)
+                    approved_models = [m for m in models if m.get("status") == "approved"]
+                    latest_approved = max([m["revision"] for m in approved_models], default=None)
+
+                    rev_header = headers.get("x-semantic-revision")
+                    if rev_header:
+                        try:
+                            req_rev = int(rev_header)
+                            # If client requested an unapproved revision but an approved one exists, use approved
+                            if latest_approved and not any(m["revision"] == req_rev and m.get("status") == "approved" for m in models):
+                                revision = latest_approved
+                            else:
+                                revision = req_rev
+                        except ValueError:
+                            revision = latest_approved or 1
+                    else:
+                        revision = latest_approved or (max([m["revision"] for m in models], default=1) if models else 1)
+
                     context = ExecutionContext(workspace_id=workspace, dataset_id=dataset_id,
                                                version=version, semantic_revision=revision, user_id=identity["user_id"])
                 except ValueError:
                     raise HTTPException(422, "Dataset version and semantic revision must be positive integers.") from None
                 snapshot = await run_in_threadpool(dataset_service._snapshot, entry, version)
-                pinned_entry = copy.deepcopy(entry)
-                pinned_entry["currentVersion"] = version
                 selection_token = current_selection.set(DatasetSelection(context, pinned_entry, copy.deepcopy(snapshot)))
-                from api.platform.semantic import semantic_registry
-                await run_in_threadpool(semantic_registry.get, pinned_entry, version, revision, True)
+                await run_in_threadpool(semantic_registry.get, pinned_entry, version, revision, True if approved_models else False)
             await self.app(scope, receive, send)
         except HTTPException as exc:
             await JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers={"Cache-Control": "no-store"})(scope, receive, send)
