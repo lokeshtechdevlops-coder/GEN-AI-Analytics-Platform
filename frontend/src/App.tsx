@@ -141,11 +141,18 @@ export default function App() {
       setHasOpenedChat(false);
       setIsCheckingSession(false);
     };
+    const onSessionExpired = () => {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setActivePath('enterprise-signin');
+    };
     window.addEventListener('pageshow', guardSignedOutSession);
     window.addEventListener('storage', guardSignedOutSession);
+    window.addEventListener('session-expired', onSessionExpired);
     return () => {
       window.removeEventListener('pageshow', guardSignedOutSession);
       window.removeEventListener('storage', guardSignedOutSession);
+      window.removeEventListener('session-expired', onSessionExpired);
     };
   }, []);
 

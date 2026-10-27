@@ -18,15 +18,28 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-api.interceptors.response.use((response) => {
-  if (typeof response.data === 'string' &&
-      (String(response.headers['content-type']).includes('text/html') || /^\s*<(?:!doctype|html)/i.test(response.data))) {
-    const message = 'SAP returned a sign-in page instead of API data. Sign in again; if this repeats, check the application router API destination.';
-    throw new axios.AxiosError(message, 'ERR_SAP_SESSION', response.config, response.request,
-      { ...response, status: 401, data: { detail: message } });
+api.interceptors.response.use(
+  (response) => {
+    if (typeof response.data === 'string' &&
+        (String(response.headers['content-type']).includes('text/html') || /^\s*<(?:!doctype|html)/i.test(response.data))) {
+      const message = 'SAP returned a sign-in page instead of API data. Sign in again; if this repeats, check the application router API destination.';
+      throw new axios.AxiosError(message, 'ERR_SAP_SESSION', response.config, response.request,
+        { ...response, status: 401, data: { detail: message } });
+    }
+    return response;
+  },
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const detail = String(error.response.data?.detail || '');
+      if (detail.includes('SAP XSUAA') || detail.includes('Sign in again') || detail.includes('expired') || detail.includes('invalid')) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.dispatchEvent(new CustomEvent('session-expired', { detail: { message: detail } }));
+      }
+    }
+    return Promise.reject(error);
   }
-  return response;
-});
+);
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
