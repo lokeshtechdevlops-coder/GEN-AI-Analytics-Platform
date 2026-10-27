@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from dotenv import load_dotenv
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 # Load environment variables from root or local directory
@@ -116,6 +117,14 @@ class Settings(BaseSettings):
     HANA_SCHEMA: str = os.getenv("HANA_SCHEMA") or _vcap_hana.get("schema", "")
     HANA_VALIDATE_CERT: bool = os.getenv("HANA_VALIDATE_CERT", "true").lower() == "true"
     HANA_POOL_SIZE: int = int(os.getenv("HANA_POOL_SIZE", "20"))
+    HANA_POOL_TIMEOUT: float = float(os.getenv("HANA_POOL_TIMEOUT", "30.0"))
+
+    @field_validator("HANA_POOL_SIZE")
+    @classmethod
+    def validate_hana_pool_size(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError(f"HANA_POOL_SIZE must be greater than 0, got {v}")
+        return v
 
     # Application Settings
     APP_ENV: str = os.getenv("APP_ENV", "development")

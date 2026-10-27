@@ -53,22 +53,31 @@ def chat_with_rag(req: ChatRequest, request: Request):
     import uuid
     user_id = get_user_id_from_request(request, req.user_id)
     chat_history = []
+    session_id = None
     try:
         session_id = history_service.get_or_create_session(req.session_id, user_id=user_id, first_message=req.message)
-
-        # 1. Save the user query
-        history_service.save_message(
-            session_id=session_id,
-            role="user",
-            content=req.message,
-        )
-
-        # 2. Load recent history for context-aware RAG
-        chat_history = history_service.get_recent_history(session_id, limit=10)
     except Exception as exc:
         session_id = req.session_id or f"ephemeral-{uuid.uuid4().hex[:8]}"
-        logger.warning(f"HANA chat persistence unavailable ({exc}); using ephemeral session {session_id}.")
-        chat_history = []
+        logger.warning(f"HANA chat session creation failed ({exc}); using ephemeral session {session_id}.")
+
+    # 1. Save the user query if session is persistent
+    if not session_id.startswith("ephemeral-"):
+        try:
+            history_service.save_message(
+                session_id=session_id,
+                role="user",
+                content=req.message,
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to persist user message for session {session_id} ({exc}).")
+
+    # 2. Load recent history for context-aware RAG
+    if not session_id.startswith("ephemeral-"):
+        try:
+            chat_history = history_service.get_recent_history(session_id, limit=10)
+        except Exception as exc:
+            logger.warning(f"Failed to load recent history for session {session_id} ({exc}); continuing with empty history.")
+            chat_history = []
 
     # 3. Run the RAG pipeline
     result = RAGPipeline().run(req.message, req.top_k, chat_history=chat_history)

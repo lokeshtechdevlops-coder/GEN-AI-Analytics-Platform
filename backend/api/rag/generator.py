@@ -158,43 +158,88 @@ class RAGGenerator:
         headers = self._get_headers()
         headers["Accept"] = "text/event-stream"
 
+        if stop_event and stop_event.is_set():
+            logger.info("[RAGGenerator] Stream aborted before request was initiated.")
+            return
+
         streamed_any = False
         t_start = time.perf_counter()
+        monitor_stop = threading.Event()
+        resp = None
+
         try:
-            with requests.post(
+            if stop_event and stop_event.is_set():
+                return
+
+            resp = requests.post(
                 self.api_url,
                 headers=headers,
                 json=payload,
                 stream=True,
                 timeout=90,
-            ) as resp:
-                if resp.status_code != 200:
-                    logger.warning(
-                        f"[RAGGenerator] Streaming request returned {resp.status_code}, "
-                        f"falling back to synchronous generation."
-                    )
-                    # Fallback: yield the complete response as a single chunk
-                    full = self.generate(formatted_prompt, system_prompt)
-                    yield full
+            )
+
+            # Monitor stop_event and close the response socket immediately on disconnect
+            # so iter_lines() is interrupted instead of hanging on socket inactivity.
+            if stop_event:
+                def _close_on_stop():
+                    while not monitor_stop.is_set():
+                        if stop_event.wait(timeout=0.1):
+                            try:
+                                if resp:
+                                    resp.close()
+                            except Exception:
+                                pass
+                            break
+
+                watcher = threading.Thread(target=_close_on_stop, daemon=True)
+                watcher.start()
+
+            if resp.status_code != 200:
+                if stop_event and stop_event.is_set():
+                    logger.info("[RAGGenerator] Stream stopped; aborting fallback generation.")
+                    return
+                logger.warning(
+                    f"[RAGGenerator] Streaming request returned {resp.status_code}, "
+                    f"falling back to synchronous generation."
+                )
+                # Fallback: yield the complete response as a single chunk
+                full = self.generate(formatted_prompt, system_prompt)
+                yield full
+                return
+
+            streamed_parts = []
+            for line in resp.iter_lines():
+                if stop_event and stop_event.is_set():
+                    logger.info("[Generator] Aborting stream and thread exits immediately; no dangling HTTP requests to NIM.")
                     return
 
-                streamed_parts = []
-                for line in resp.iter_lines():
-                    if stop_event and stop_event.is_set():
-                        logger.info("[Generator] Aborting stream and thread exits immediately; no dangling HTTP requests to NIM.")
-                        return
+                if not line:
+                    continue
+                line_str = line.decode("utf-8").strip()
 
-                    if not line:
-                        continue
-                    line_str = line.decode("utf-8").strip()
+                if not line_str.startswith("data: "):
+                    continue
 
-                    if not line_str.startswith("data: "):
-                        continue
-
-                    data_str = line_str[6:]
-                    if data_str == "[DONE]":
-                        elapsed_ms = round((time.perf_counter() - t_start) * 1000, 1)
+                data_str = line_str[6:]
+                if data_str == "[DONE]":
+                    elapsed_ms = round((time.perf_counter() - t_start) * 1000, 1)
+                    try:
+                        from calculate_token_usage import record_token_usage, estimate_tokens
+                        record_token_usage(
+                            "RAG Stream",
+                            self.model,
+                            estimate_tokens(formatted_prompt),
+                            estimate_tokens("".join(streamed_parts)),
+                            latency_ms=elapsed_ms
+                        )
+                    except ImportError:
                         try:
+                            import sys
+                            from pathlib import Path
+                            root_p = str(Path(__file__).resolve().parents[3])
+                            if root_p not in sys.path:
+                                sys.path.insert(0, root_p)
                             from calculate_token_usage import record_token_usage, estimate_tokens
                             record_token_usage(
                                 "RAG Stream",
@@ -203,49 +248,46 @@ class RAGGenerator:
                                 estimate_tokens("".join(streamed_parts)),
                                 latency_ms=elapsed_ms
                             )
-                        except ImportError:
-                            try:
-                                import sys
-                                from pathlib import Path
-                                root_p = str(Path(__file__).resolve().parents[3])
-                                if root_p not in sys.path:
-                                    sys.path.insert(0, root_p)
-                                from calculate_token_usage import record_token_usage, estimate_tokens
-                                record_token_usage(
-                                    "RAG Stream",
-                                    self.model,
-                                    estimate_tokens(formatted_prompt),
-                                    estimate_tokens("".join(streamed_parts)),
-                                    latency_ms=elapsed_ms
-                                )
-                            except Exception:
-                                pass
                         except Exception:
                             pass
-                        break
+                    except Exception:
+                        pass
+                    break
 
-                    try:
-                        chunk = json.loads(data_str)
-                        choices = chunk.get("choices", [])
-                        if choices:
-                            delta = choices[0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                streamed_any = True
-                                streamed_parts.append(content)
-                                yield content
-                    except (json.JSONDecodeError, KeyError, IndexError) as e:
-                        logger.debug(f"[RAGGenerator] Skipping malformed stream chunk: {e}")
+                try:
+                    chunk = json.loads(data_str)
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            streamed_any = True
+                            streamed_parts.append(content)
+                            yield content
+                except (json.JSONDecodeError, KeyError, IndexError) as e:
+                    logger.debug(f"[RAGGenerator] Skipping malformed stream chunk: {e}")
 
         except requests.exceptions.Timeout:
+            if stop_event and stop_event.is_set():
+                logger.info("[RAGGenerator] Streaming request stopped via stop_event.")
+                return
             logger.warning("[RAGGenerator] Streaming request timed out.")
             if not streamed_any:
+                if stop_event and stop_event.is_set():
+                    logger.info("[RAGGenerator] Stream stopped; aborting fallback request.")
+                    return
                 logger.info("[RAGGenerator] Falling back to synchronous generation after stream timeout.")
                 full = self.generate(formatted_prompt, system_prompt)
                 yield full
         except Exception as e:
+            if stop_event and stop_event.is_set():
+                logger.info(f"[RAGGenerator] Streaming generation aborted via stop_event ({type(e).__name__}).")
+                return
             logger.error(f"[RAGGenerator] Streaming generation error: {e}")
             if not streamed_any:
+                if stop_event and stop_event.is_set():
+                    logger.info("[RAGGenerator] Stream stopped; aborting fallback request.")
+                    return
                 logger.info("[RAGGenerator] Falling back to synchronous generation after stream error.")
                 try:
                     full = self.generate(formatted_prompt, system_prompt)
@@ -253,6 +295,13 @@ class RAGGenerator:
                 except Exception as fallback_err:
                     logger.error(f"[RAGGenerator] Synchronous fallback also failed: {fallback_err}")
                     raise
+        finally:
+            monitor_stop.set()
+            if resp:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
 
 
 generator = RAGGenerator()

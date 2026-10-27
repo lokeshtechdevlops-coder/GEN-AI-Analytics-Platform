@@ -43,21 +43,29 @@ async def chat_stream(req: ChatRequest, request: Request):
     # ── Resolve or create session ─────────────────────────────────────────
     from api.utils.auth import get_user_id_from_request
     user_id = get_user_id_from_request(request, req.user_id)
+    session_id = None
     chat_history = []
     try:
         session_id = history_service.get_or_create_session(req.session_id, user_id=user_id, first_message=req.message)
-        # Save user query immediately
-        history_service.save_message(
-            session_id=session_id,
-            role="user",
-            content=req.message,
-        )
-        # Load recent history for context-aware RAG
-        chat_history = history_service.get_recent_history(session_id, limit=10)
     except Exception as exc:
         session_id = req.session_id or f"ephemeral-{uuid.uuid4().hex[:8]}"
-        logger.warning(f"HANA chat persistence unavailable ({exc}); using ephemeral session {session_id}.")
-        chat_history = []
+        logger.warning(f"HANA chat session creation failed ({exc}); using ephemeral session {session_id}.")
+
+    if not session_id.startswith("ephemeral-"):
+        try:
+            history_service.save_message(
+                session_id=session_id,
+                role="user",
+                content=req.message,
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to persist user message for session {session_id} ({exc}).")
+
+        try:
+            chat_history = history_service.get_recent_history(session_id, limit=10)
+        except Exception as exc:
+            logger.warning(f"Failed to load recent history for session {session_id} ({exc}); continuing with empty history.")
+            chat_history = []
 
     def stage_callback(event: dict) -> None:
         """Thread-safe callback invoked by the pipeline for each stage transition or token."""
