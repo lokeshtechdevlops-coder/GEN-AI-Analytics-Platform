@@ -13,9 +13,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 }) => {
   const tabs = [
     { id: 'executive-dashboard', label: 'Executive', icon: 'dashboard' },
-    { id: 'ai-dashboards-rag-chat', label: 'RAG Chat', icon: 'chat' },
+    { id: 'ai-agents', label: 'Agents', icon: 'smart_toy' },
     { id: 'build-your-kpi-graph-studio', label: 'Studio', icon: 'query_stats' },
-    { id: 'upload-dataset', label: 'Ingest', icon: 'upload_file' },
+    { id: 'upload-dataset', label: 'Upload Files', icon: 'upload_file' },
     { id: 'data-explorer', label: 'Explorer', icon: 'terminal' },
   ];
 
@@ -27,7 +27,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       <div className="grid grid-cols-6 items-center h-14 sm:h-16 px-0.5 sm:px-1 max-w-lg mx-auto">
         {tabs.map((tab) => {
           const isActive = activePath === tab.id;
-          const isAiTab = tab.id === 'ai-dashboards-rag-chat' || tab.id === 'build-your-kpi-graph-studio';
+          const isAiTab = tab.id === 'build-your-kpi-graph-studio' || tab.id === 'ai-agents';
           const activeColor = isAiTab ? 'text-[#7C3AED]' : 'text-[#2563EB]';
 
           return (

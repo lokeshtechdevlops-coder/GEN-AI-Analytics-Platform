@@ -9,11 +9,37 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Initialize default Authorization header from stored token
+const existingToken = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+if (existingToken) {
+  api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
+}
+
+export function setAuthToken(token: string | null) {
+  if (token) {
+    localStorage.setItem('auth_token', token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    localStorage.removeItem('auth_token');
+    delete api.defaults.headers.common['Authorization'];
+  }
+}
+
 api.interceptors.request.use((config) => {
-  Object.entries(contextHeaders()).forEach(([key, value]) => { config.headers[key] = value; });
+  Object.entries(contextHeaders()).forEach(([key, value]) => {
+    if (config.headers && typeof (config.headers as any).set === 'function') {
+      (config.headers as any).set(key, value);
+    } else {
+      config.headers[key] = value;
+    }
+  });
   const token = localStorage.getItem('auth_token');
   if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;
+    if (config.headers && typeof (config.headers as any).set === 'function') {
+      (config.headers as any).set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
   }
   return config;
 });

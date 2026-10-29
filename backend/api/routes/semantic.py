@@ -4,7 +4,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, Form
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-from api.models.execution_context import current_selection, require_dataset_access
+from api.models.execution_context import current_selection, require_dataset_access, current_identity, is_admin
 from api.models.query_plan import QueryPlan
 from api.platform.contracts import AnalyticsItem, SemanticModel, TransformationPlan
 from api.platform.ingestion import ingestion_service
@@ -44,6 +44,9 @@ class DashboardPublication(BaseModel):
 
 @router.post("/api/insights/dashboard")
 def publish_dashboard(publication: DashboardPublication):
+    identity = current_identity.get()
+    if identity and not is_admin(identity):
+        raise HTTPException(403, "Only Admin accounts can publish widgets to the dashboard.")
     value = selected()
     require_dataset_access(value.entry, write=True)
     items = semantic_registry.items(value.entry, value.context.version, value.context.semantic_revision)
@@ -149,6 +152,9 @@ def revise_item(item: AnalyticsItem):
 
 @router.post("/api/insights/definitions/{item_id}/{revision}/review")
 def review_item(item_id: str, revision: int, body: Review):
+    identity = current_identity.get()
+    if identity and not is_admin(identity):
+        raise HTTPException(403, "Only Admin accounts can approve or reject definitions.")
     value = selected()
     items = semantic_registry.items(value.entry, value.context.version, value.context.semantic_revision)
     item = next((i for i in items if i.id == item_id and i.revision == revision), None)

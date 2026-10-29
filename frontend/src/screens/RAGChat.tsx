@@ -16,6 +16,9 @@ import { selectedContext } from '../services/executionContext';
 interface RAGChatProps {
   onNavigate: (path: string) => void;
   isActive: boolean;
+  onClose?: () => void;
+  onToggleMaximize?: () => void;
+  isMaximized?: boolean;
 }
 
 export interface RetrievedDocument {
@@ -114,7 +117,7 @@ export const formatStageTitle = (stage: string): string => {
   }
 };
 
-export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
+export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose, onToggleMaximize, isMaximized }) => {
   const [suggestions, setSuggestions] = useState([{ icon: 'table', color: 'text-blue-700', title: 'Count source records', query: 'Count records' }]);
   useEffect(() => {
     const context = selectedContext();
@@ -134,9 +137,8 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
   const [searchThreads, setSearchThreads] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Keep session history sidebar closed by default; sessions are pre-fetched in background
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  // Chat history drawer (slides in above current chat from the side toggle)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Three-dot menu and modal states
   const [activeMenuThreadId, setActiveMenuThreadId] = useState<string | null>(null);
@@ -173,6 +175,17 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
   const draftIds = useRef(new Set([threads[0].id]));
 
   useEffect(() => () => { messageRequestRef.current?.abort(); streamRequestRef.current?.abort(); }, []);
+
+  // Close history drawer when Escape is pressed
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSidebarOpen) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSidebarOpen]);
 
   // Currently active thread
   const activeThread = threads.find(t => t.id === activeThreadId) || threads[0] || null;
@@ -364,7 +377,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
     messageRequestRef.current?.abort();
     messageRequestRef.current = null;
     setActiveThreadId(threadId);
-    setMobileDrawerOpen(false);
+    setIsSidebarOpen(false);
     setSessionLoadError(null);
     setInputText('');
     if (draftIds.current.has(threadId)) {
@@ -397,7 +410,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
       return updated;
     });
     setActiveThreadId(newThread.id);
-    setMobileDrawerOpen(false);
+    setIsSidebarOpen(false);
     setInputText('');
     showToast('Created new conversation');
     setTimeout(() => inputRef.current?.focus(), 80);
@@ -849,23 +862,26 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
         </div>
       )}
 
-      {/* Mobile Drawer Overlay */}
-      {mobileDrawerOpen && (
+      {/* Chat History Overlay Backdrop (covers current chat when drawer is open) */}
+      {isSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/35 backdrop-blur-xs lg:hidden"
-          onClick={() => setMobileDrawerOpen(false)}
+          className="absolute inset-0 z-30 bg-black/25 backdrop-blur-[1px] transition-opacity duration-300 animate-in fade-in"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
       {/* ============================================================ */}
-      {/* 1. LEFT COLUMN: Collapsible Chat History Sidebar */}
+      {/* 1. CHAT SESSIONS DRAWER: Slides in above current chat from the side */}
       {/* ============================================================ */}
       <aside
         className={`
-          ${sidebarCollapsed ? 'lg:w-0 lg:border-r-0 lg:p-0 lg:opacity-0' : 'lg:w-[270px] xl:w-[290px] lg:border-r lg:p-3 lg:opacity-100'}
-          ${mobileDrawerOpen ? 'translate-x-0 w-[280px] p-3 border-r shadow-2xl' : '-translate-x-full lg:translate-x-0'}
-          fixed lg:static inset-y-0 left-0 z-50 lg:z-auto bg-[#F8FAFC] border-[#E2E8F0] flex flex-col justify-between transition-all duration-300 ease-in-out shrink-0 overflow-hidden h-full
+          absolute inset-y-0 left-0 z-40 w-[280px] sm:w-[310px] max-w-[85%]
+          bg-[#F8FAFC] border-r border-[#E2E8F0] flex flex-col justify-between
+          transition-all duration-300 ease-in-out p-3 overflow-hidden h-full
+          ${isSidebarOpen ? 'translate-x-0 pointer-events-auto shadow-2xl opacity-100 visible' : '-translate-x-full pointer-events-none shadow-none opacity-0 invisible'}
         `}
+        aria-label="Chat history sessions"
       >
         <div className="flex flex-col h-full min-w-[245px] overflow-hidden">
           {/* Top Actions: New Chat & Collapse */}
@@ -879,14 +895,12 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
               <span>New Chat</span>
             </button>
 
-            {/* Collapse toggle (desktop collapses sidebar; mobile closes drawer) */}
+            {/* Collapse toggle */}
             <button
-              onClick={() => {
-                setMobileDrawerOpen(false);
-                setSidebarCollapsed(true);
-              }}
+              type="button"
+              onClick={() => setIsSidebarOpen(false)}
               title="Collapse history sidebar"
-              className="w-9 h-9 rounded-xl bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors shrink-0 shadow-2xs"
+              className="w-9 h-9 rounded-xl bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer"
               aria-label="Collapse history sidebar"
             >
               <span className="material-symbols-outlined text-[18px]">left_panel_close</span>
@@ -1058,9 +1072,9 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
       </aside>
 
       {/* ============================================================ */}
-      {/* 2. RIGHT COLUMN: Main Chat Application Container */}
+      {/* 2. MAIN CHAT APPLICATION CONTAINER (Full Width, Never Shrinks) */}
       {/* ============================================================ */}
-      <div className="flex-1 flex flex-col h-full min-w-0 bg-white overflow-hidden">
+      <div className="flex-1 w-full flex flex-col h-full min-w-0 bg-white overflow-hidden">
         {/* ============================================================ */}
         {/* CHAT HEADER: Persistent, Stable Top Control Bar */}
         {/* ============================================================ */}
@@ -1069,19 +1083,14 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 overflow-hidden mr-2">
             {/* Sidebar Toggle Button */}
             <button
-              onClick={() => {
-                if (window.innerWidth < 1024) {
-                  setMobileDrawerOpen(prev => !prev);
-                } else {
-                  setSidebarCollapsed(prev => !prev);
-                }
-              }}
-              title={sidebarCollapsed ? "Open chat history" : "Collapse chat history"}
-              className="w-8.5 h-8.5 rounded-full flex items-center justify-center text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors border border-[#E2E8F0] bg-white shrink-0 shadow-2xs"
+              type="button"
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              title={isSidebarOpen ? "Collapse chat history" : "Open chat history"}
+              className="w-8.5 h-8.5 rounded-full flex items-center justify-center text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors border border-[#E2E8F0] bg-white shrink-0 shadow-2xs cursor-pointer"
               aria-label="Toggle chat history sidebar"
             >
               <span className="material-symbols-outlined text-[19px]">
-                {sidebarCollapsed ? 'dock_to_left' : 'left_panel_close'}
+                {isSidebarOpen ? 'left_panel_close' : 'dock_to_left'}
               </span>
             </button>
 
@@ -1090,19 +1099,14 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
               <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
                 <h2
                   title={activeThread?.title || 'Conversational Analytics'}
-                  className={`font-headline-sm text-xs sm:text-sm text-[#0F172A] font-semibold truncate block leading-tight min-w-0 ${!sidebarCollapsed
-                      ? 'max-w-[110px] xs:max-w-[150px] sm:max-w-[200px] md:max-w-[240px] lg:max-w-[280px]'
-                      : 'max-w-xs sm:max-w-md'
-                    }`}
+                  className="font-headline-sm text-xs sm:text-sm text-[#0F172A] font-semibold truncate block leading-tight min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-xs md:max-w-md"
                 >
                   {activeThread?.title || 'Conversational Analytics'}
                 </h2>
-                {sidebarCollapsed && (
-                  <span className="hidden xl:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#166534] text-[10px] font-medium border border-[#BBF7D0] shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
-                    <span>HANA Vector Synced</span>
-                  </span>
-                )}
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#166534] text-[10px] font-medium border border-[#BBF7D0] shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
+                  <span>HANA Vector Synced</span>
+                </span>
               </div>
               <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#64748B] truncate leading-tight mt-0.5 min-w-0">
                 <span>us10-prod</span>
@@ -1144,6 +1148,32 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive }) => {
               <span className="material-symbols-outlined text-[15px] text-[#64748B]">restart_alt</span>
               <span>Clear</span>
             </button>
+
+            {onToggleMaximize && (
+              <button
+                type="button"
+                onClick={onToggleMaximize}
+                title={isMaximized ? "Restore window" : "Maximize chat window"}
+                className="w-8.5 h-8.5 rounded-full bg-white hover:bg-[#F8FAFC] text-[#475569] hover:text-[#0F172A] border border-[#CBD5E1] inline-flex items-center justify-center transition-colors shadow-2xs shrink-0 cursor-pointer"
+                aria-label={isMaximized ? "Restore window" : "Maximize chat window"}
+              >
+                <span className="material-symbols-outlined text-[17px]">
+                  {isMaximized ? 'collapse_content' : 'open_in_full'}
+                </span>
+              </button>
+            )}
+
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                title="Close chat"
+                className="w-8.5 h-8.5 rounded-full bg-white hover:bg-rose-50 text-[#475569] hover:text-rose-600 border border-[#CBD5E1] hover:border-rose-200 inline-flex items-center justify-center transition-colors shadow-2xs shrink-0 cursor-pointer"
+                aria-label="Close chat"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            )}
           </div>
         </header>
 

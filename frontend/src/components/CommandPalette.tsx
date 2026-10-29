@@ -40,6 +40,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     { id: 'executive-dashboard', title: 'Executive Sales & Analytics Dashboard', category: 'Navigation', icon: 'dashboard', hint: 'Live metrics, regional breakdown, SKU leaderboard' },
     { id: 'ai-dashboards-rag-chat', title: 'Conversational Analytics & RAG Chat', category: 'Navigation', icon: 'chat', hint: 'Vector-grounded AI assistant' },
     { id: 'build-your-kpi-graph-studio', title: 'Build Your KPI', category: 'Navigation', icon: 'query_stats', hint: 'KPI builder & custom charts' },
+    { id: 'ai-agents', title: 'Autonomous AI Agents Hub', category: 'Navigation', icon: 'smart_toy', hint: 'Multi-agent orchestration, autonomous workflows & reasoning telemetry' },
     { id: 'upload-dataset', title: 'Dataset Management & Ingestion', category: 'Navigation', icon: 'upload_file', hint: 'Upload Excel/CSV to HANA Vector store' },
     { id: 'data-explorer', title: 'Data Explorer & Text-to-SQL Analytics', category: 'Navigation', icon: 'terminal', hint: 'SQL generator across 39 columns' },
     { id: 'alerts-notifications', title: 'Alerts & Margin Thresholds', category: 'Navigation', icon: 'notifications', hint: 'Breach alerts & trigger logs' },

@@ -1,5 +1,6 @@
 import React, { useState, FormEvent } from 'react';
 import { clearLocalIdentity, sapSignInTarget } from '../services/authNavigation';
+import { setAuthToken } from '../services/api';
 import {
   ShieldCheck,
   Eye,
@@ -59,10 +60,11 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
   };
 
   // Direct Credential Auth Submission (Corporate Email & Password)
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    const cleanEmail = email.trim();
-    if (!cleanEmail || !password) {
+  const handleSubmit = async (e?: FormEvent, directEmail?: string, directPassword?: string) => {
+    if (e?.preventDefault) e.preventDefault();
+    const cleanEmail = (directEmail !== undefined ? directEmail : email).trim();
+    const cleanPassword = directPassword !== undefined ? directPassword : password;
+    if (!cleanEmail || !cleanPassword) {
       setError('Please provide both corporate email address and master password.');
       return;
     }
@@ -78,7 +80,7 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
         const loginRes = await fetch(`${apiBaseUrl}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail, password, rememberMe })
+          body: JSON.stringify({ email: cleanEmail, password: cleanPassword, rememberMe })
         });
 
         const data = await loginRes.json();
@@ -100,7 +102,7 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
       if (userContext) {
         clearLocalIdentity(false);
         if (token) {
-          localStorage.setItem('auth_token', token);
+          setAuthToken(token);
           localStorage.setItem('auth_user', JSON.stringify(userContext));
         }
         if (onSignInSuccess) {
@@ -857,10 +859,7 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
                     onClick={() => {
                       setEmail('lokesh@neovatic.com');
                       setPassword('password');
-                      setTimeout(() => {
-                        const fakeEvent = { preventDefault: () => {} } as FormEvent;
-                        void handleSubmit(fakeEvent);
-                      }, 50);
+                      void handleSubmit(undefined, 'lokesh@neovatic.com', 'password');
                     }}
                     style={{
                       width: '100%',

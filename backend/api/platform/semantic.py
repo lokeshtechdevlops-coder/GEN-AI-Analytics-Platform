@@ -132,7 +132,7 @@ class SemanticRegistry:
         return [AnalyticsItem.model_validate(row["value"]) for row in rows]
 
     def propose_analytics(self, entry, version, revision, snapshot):
-        require_dataset_access(entry, write=True)
+        require_dataset_access(entry)
         model = self.get(entry, version, revision, approved=True)
         specs = [("Record count", "kpi", QueryPlan(metric="*", aggregation="COUNT"), [], "Counts source rows at the approved grain.")]
         dimensions = [f for f in model.fields if f.role == "dimension"]
@@ -157,7 +157,7 @@ class SemanticRegistry:
         return AnalyticsPlan(dataset_id=entry["id"], data_version=version, semantic_revision=revision, items=items)
 
     def save_item(self, entry, version, semantic_revision, proposed):
-        require_dataset_access(entry, write=True)
+        require_dataset_access(entry)
         model = self.get(entry, version, semantic_revision, approved=True)
         previous = [i for i in self.items(entry, version, semantic_revision) if i.id == proposed["id"]]
         revision = max([i.revision for i in previous] + [0]) + 1

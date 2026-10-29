@@ -161,10 +161,12 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
     </div>
   );
 
-  const secondKey = measures.find(key => key !== valueKey && key in rows[0]);
+  const numericColumns = columns.filter(c => c !== valueKey && rows.some(r => r[c] != null && !isNaN(Number(r[c])) && Number.isFinite(Number(r[c]))));
+  const secondKey = measures.find(key => key !== valueKey && key in rows[0]) || numericColumns[0];
   const scatterX = secondKey ? rows.map(row => row[secondKey] == null ? null : Number(row[secondKey])) : [];
   const xs = scatterX.filter((v): v is number => v !== null && Number.isFinite(v));
-  const xLow = Math.min(...xs), xHigh = Math.max(...xs);
+  const xLow = xs.length ? Math.min(...xs) : 0, xHigh = xs.length ? Math.max(...xs) : 1;
+  const hasSecondMeasure = Boolean(secondKey && xs.length > 0);
   const pieValid = finite.length === values.length && finite.every(v => v >= 0) && finite.reduce((a, b) => a + b, 0) > 0;
   let angle = -Math.PI / 2;
   const total = finite.reduce((a, b) => a + b, 0);
@@ -219,10 +221,6 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
             {String(result.summary?.formatted_value || formatTableCell(rows[0][valueKey] ?? 'N/A', valueKey).display)}
           </p>
         </div>
-      ) : definition.kind === 'scatter' && !secondKey ? (
-        <p role="alert" className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-          Scatter charts require two numeric measures.
-        </p>
       ) : definition.kind === 'pie' && !pieValid ? (
         <p role="alert" className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
           Pie charts require nonnegative, nonmissing values and a positive total.
@@ -304,25 +302,56 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
               </>
             ) : definition.kind === 'scatter' ? (
               rows.map((row, index) => {
-                const value = values[index], xVal = scatterX[index];
-                if (value === null || xVal === null || !Number.isFinite(value) || !Number.isFinite(xVal)) return null;
-                const cx = chartLeft + ((xVal - xLow) / (xHigh - xLow || 1)) * chartWidth;
+                const value = values[index];
+                if (value === null || !Number.isFinite(value)) return null;
+                const xVal = hasSecondMeasure ? scatterX[index] : null;
+                if (hasSecondMeasure && (xVal === null || !Number.isFinite(xVal))) return null;
+                const cx = hasSecondMeasure
+                  ? chartLeft + ((xVal - xLow) / (xHigh - xLow || 1)) * chartWidth
+                  : x(index);
+                const cy = y(value);
                 const isHovered = hoveredIndex === index;
                 return (
-                  <circle
-                    key={index}
-                    cx={cx}
-                    cy={y(value)}
-                    r={isHovered ? 6 : 4}
-                    fill={isHovered ? '#1D4ED8' : '#2563EB'}
-                    stroke="#FFFFFF"
-                    strokeWidth="1.5"
-                    style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
-                    onMouseEnter={() => setHoveredIndex(index)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <title>{secondKey}: {String(row[secondKey!])}; {valueKey}: {formatTableCell(row[valueKey], valueKey).display}</title>
-                  </circle>
+                  <g key={index}>
+                    {isHovered && (
+                      <line
+                        x1={cx}
+                        y1={cy}
+                        x2={cx}
+                        y2={chartBottom}
+                        stroke="#93C5FD"
+                        strokeWidth="1.5"
+                        strokeDasharray="3 3"
+                      />
+                    )}
+                    {isHovered && (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={11}
+                        fill="#3B82F6"
+                        opacity="0.2"
+                      />
+                    )}
+                    <circle
+                      key={index}
+                      cx={cx}
+                      cy={cy}
+                      r={isHovered ? 7 : 5}
+                      fill={isHovered ? '#1D4ED8' : '#2563EB'}
+                      stroke="#FFFFFF"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+                      onMouseEnter={() => setHoveredIndex(index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                    >
+                      <title>
+                        {hasSecondMeasure
+                          ? `${secondKey}: ${formatTableCell(row[secondKey], secondKey).display}; ${valueKey}: ${formatTableCell(row[valueKey], valueKey).display}`
+                          : `${String(row[labelKey])}: ${formatTableCell(row[valueKey], valueKey).display}`}
+                      </title>
+                    </circle>
+                  </g>
                 );
               })
             ) : definition.kind === 'pie' ? (
@@ -392,7 +421,7 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
             )}
 
             {/* X-axis labels without aggressive truncation */}
-            {!['pie', 'scatter'].includes(definition.kind) &&
+            {(!['pie'].includes(definition.kind) && (!hasSecondMeasure || definition.kind !== 'scatter')) &&
               rows.map((row, index) => {
                 if (index % labelStep !== 0) return null;
                 const label = String(row[labelKey] ?? 'Missing');
@@ -428,6 +457,17 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
                   </text>
                 );
               })}
+
+            {definition.kind === 'scatter' && hasSecondMeasure && (
+              <g>
+                <text x={chartLeft} y={chartBottom + 16} textAnchor="start" fontSize="9" fill="#64748B" fontWeight="500">
+                  {formatNumber(xLow)}
+                </text>
+                <text x={chartRight} y={chartBottom + 16} textAnchor="end" fontSize="9" fill="#64748B" fontWeight="500">
+                  {formatNumber(xHigh)} ({humanizeColumnName(secondKey)})
+                </text>
+              </g>
+            )}
 
             {tooltip}
           </svg>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../services/api';
+import { ensureDefaultContext } from '../services/executionContext';
 import { AnalyticsWidget } from '../components/AnalyticsWidget';
 import { AnalyticsDefinition, ExecutionResult } from '../services/semanticService';
 
@@ -16,6 +17,7 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
     setLoading(true);
     setError('');
     try {
+      await ensureDefaultContext();
       setDashboard((await api.get('/dashboard')).data);
     } catch (err) {
       setError(getApiErrorMessage(err, 'Dashboard could not be loaded.'));

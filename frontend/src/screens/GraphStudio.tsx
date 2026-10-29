@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../services/api';
 import { selectedContext, ensureDefaultContext, selectContext } from '../services/executionContext';
+import { hasAdminRole } from '../services/authService';
 import {
   AnalyticsDefinition,
   ExecutionResult,
@@ -56,7 +57,14 @@ const TEN_STEPS = [
 
 type CreationMode = 'visual' | 'prompt' | 'data_options';
 
-export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void }) {
+export function GraphStudio({
+  onNavigate,
+  user,
+}: {
+  onNavigate: (path: string) => void;
+  user?: { role?: string; roles?: string[] } | null;
+}) {
+  const canPublish = hasAdminRole(user);
   const [model, setModel] = useState<SemanticModel | null>(null);
   const [items, setItems] = useState<AnalyticsDefinition[]>([]);
   const [previews, setPreviews] = useState<Record<string, ExecutionResult>>({});
@@ -232,6 +240,10 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
   };
 
   const handlePublishDashboard = async () => {
+    if (!canPublish) {
+      setError('Permission denied: Only Admin or Admin+User accounts can publish widgets to the Executive Dashboard.');
+      return;
+    }
     if (!selected.length) return;
     await run(async () => {
       const selectedWidgets = items.filter(i => selected.includes(`${i.id}:${i.revision}`));
@@ -873,7 +885,10 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
         </section>
       )}
 
-      {/* CONFIGURED DEFINITIONS STREAM (Matches Reference Image 1) */}
+      {/* CONFIGURED DEFINITIONS & WIDGETS STREAM: Visible only in Visual KPI Builder tab */}
+      {activeMode === 'visual' && (
+        <>
+          {/* CONFIGURED DEFINITIONS STREAM (Matches Reference Image 1) */}
       <section className="space-y-4 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
           <div>
@@ -881,7 +896,9 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
               Configured Definitions ({items.length})
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Review and approve definitions. Check approved cards to publish them live to the Executive Dashboard.
+              {canPublish
+                ? 'Review and approve definitions. Check approved cards to publish them live to the Executive Dashboard.'
+                : 'Review definitions and preview charts. Widget publishing to Executive Dashboard is restricted to Admin or Admin+User.'}
             </p>
           </div>
           {items.length > 0 && (
@@ -962,7 +979,7 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
                   </summary>
                   <div className="mt-2.5 space-y-2">
                     <p>
-                      <strong>Dependencies:</strong> {item.dependencies.join(', ') || 'Source rows count'}
+                      <strong>Dependencies:</strong> {(item.dependencies || []).join(', ') || 'Source rows count'}
                     </p>
                     <pre className="overflow-auto bg-slate-900 text-slate-100 rounded-lg p-3 text-[11px] font-mono leading-relaxed">
                       {JSON.stringify(item.query_plan, null, 2)}
@@ -1067,24 +1084,34 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
                   </div>
 
                   {item.status === 'approved' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelected(prev =>
-                          prev.includes(key) ? prev.filter(v => v !== key) : [...prev, key]
-                        );
-                      }}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none border ${
-                        isSelected
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-500 hover:text-emerald-700'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[16px]">
-                        {isSelected ? 'check_box' : 'add_box'}
-                      </span>
-                      <span>{isSelected ? 'Included on Dashboard' : 'Include on Dashboard'}</span>
-                    </button>
+                    canPublish ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelected(prev =>
+                            prev.includes(key) ? prev.filter(v => v !== key) : [...prev, key]
+                          );
+                        }}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none border ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-500 hover:text-emerald-700'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {isSelected ? 'check_box' : 'add_box'}
+                        </span>
+                        <span>{isSelected ? 'Included on Dashboard' : 'Include on Dashboard'}</span>
+                      </button>
+                    ) : (
+                      <div
+                        title="Only Admin or Admin+User accounts have permission to publish widgets to the Executive Dashboard."
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 flex items-center gap-1.5 select-none cursor-not-allowed"
+                      >
+                        <span className="material-symbols-outlined text-[15px] text-slate-400">lock</span>
+                        <span>Publishing (Admin Only)</span>
+                      </div>
+                    )
                   )}
                 </div>
               </article>
@@ -1094,45 +1121,66 @@ export function GraphStudio({ onNavigate }: { onNavigate: (path: string) => void
       </section>
 
       {/* Sticky Bottom Publishing Bar */}
-      <div className="sticky bottom-4 z-40 bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-xl">dashboard_customize</span>
-          </div>
-          <div>
-            <div className="text-sm font-bold text-slate-900">
-              {selected.length === 0
-                ? 'No widgets selected for Executive Dashboard'
-                : `${selected.length} widget${selected.length > 1 ? 's' : ''} ready to publish`}
+      {canPublish ? (
+        <div className="sticky bottom-4 z-40 bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-xl">dashboard_customize</span>
             </div>
-            <div className="text-xs text-slate-500">
-              {selected.length === 0
-                ? 'Click "Include on Dashboard" on any approved KPI card above.'
-                : 'Click button to deploy selected widgets live to the Executive Dashboard.'}
+            <div>
+              <div className="text-sm font-bold text-slate-900">
+                {selected.length === 0
+                  ? 'No widgets selected for Executive Dashboard'
+                  : `${selected.length} widget${selected.length > 1 ? 's' : ''} ready to publish`}
+              </div>
+              <div className="text-xs text-slate-500">
+                {selected.length === 0
+                  ? 'Click "Include on Dashboard" on any approved KPI card above.'
+                  : 'Click button to deploy selected widgets live to the Executive Dashboard.'}
+              </div>
             </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          disabled={busy || selected.length === 0}
-          onClick={() => void handlePublishDashboard()}
-          className={`inline-flex items-center gap-2 font-bold text-sm px-6 py-2.5 rounded-xl shadow-md transition-all ${
-            selected.length > 0
-              ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:shadow-lg'
-              : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <span className="material-symbols-outlined text-lg">{busy ? 'sync' : 'publish'}</span>
-          <span>
-            {busy
-              ? 'Publishing...'
-              : selected.length === 0
-              ? 'Publish to Dashboard'
-              : `Publish ${selected.length} Widget${selected.length > 1 ? 's' : ''}`}
+          <button
+            type="button"
+            disabled={busy || selected.length === 0}
+            onClick={() => void handlePublishDashboard()}
+            className={`inline-flex items-center gap-2 font-bold text-sm px-6 py-2.5 rounded-xl shadow-md transition-all ${
+              selected.length > 0
+                ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer hover:shadow-lg'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">{busy ? 'sync' : 'publish'}</span>
+            <span>
+              {busy
+                ? 'Publishing...'
+                : selected.length === 0
+                ? 'Publish to Dashboard'
+                : `Publish ${selected.length} Widget${selected.length > 1 ? 's' : ''}`}
+            </span>
+          </button>
+        </div>
+      ) : (
+        <div className="sticky bottom-4 z-40 bg-slate-50/95 backdrop-blur-md border border-slate-200/80 shadow-md rounded-2xl p-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-200/80 text-slate-600 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-lg">admin_panel_settings</span>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-800">Publishing Restricted to Administrators</div>
+              <div className="text-[11px] text-slate-500">
+                Only <strong>Admin</strong> or <strong>Admin+User</strong> accounts have permission to publish widgets to the Executive Dashboard.
+              </div>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold text-slate-500 bg-slate-200/70 border border-slate-300/80 px-2.5 py-1 rounded-lg select-none">
+            Read-Only
           </span>
-        </button>
-      </div>
+        </div>
+      )}
+      </>
+    )}
     </div>
   );
 }

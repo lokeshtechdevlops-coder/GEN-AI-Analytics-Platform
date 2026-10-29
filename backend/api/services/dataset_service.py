@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastapi import HTTPException
-from api.models.execution_context import current_identity, current_selection, require_dataset_access
+from api.models.execution_context import current_identity, current_selection, require_dataset_access, is_admin
 
 
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / "preprocessing" / "output"

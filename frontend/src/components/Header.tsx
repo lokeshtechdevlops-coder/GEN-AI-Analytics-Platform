@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { hasAdminRole, getRoleLabel } from '../services/authService';
 import { NeovaticLogo } from './NeovaticLogo';
 
 interface HeaderProps {
@@ -11,6 +12,7 @@ interface HeaderProps {
     name?: string;
     email?: string;
     roles?: string[];
+    role?: string;
   } | null;
 }
 
@@ -25,10 +27,12 @@ export const Header: React.FC<HeaderProps> = ({
   const [profileOpen, setProfileOpen] = useState(false);
 
   const rolesList = user?.roles || [];
-  const isAdmin = rolesList.includes('Admin');
-  const isMember = rolesList.includes('Member');
-  const roleLabel = isAdmin ? 'Admin' : (isMember ? 'Member' : 'User');
-  const roleSubtitle = isAdmin ? 'Administrator' : (isMember ? 'Member' : 'Standard User');
+  const isAdmin = hasAdminRole(user);
+  // roles verified via hasAdminRole and getRoleLabel
+  const roleLabel = getRoleLabel(user);
+  const roleSubtitle = isAdmin
+    ? (roleLabel === 'Admin+User' ? 'Administrator & User' : 'Administrator')
+    : 'Standard User';
 
   const isHomeActive = activePath === 'executive-dashboard';
   const isAlertsActive = activePath === 'alerts-notifications';
@@ -94,11 +98,10 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onNavigate('executive-dashboard')}
           title="Home"
           aria-label="Home"
-          className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${
-            isHomeActive
+          className={`flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${isHomeActive
               ? 'bg-[#EFF6FF] text-[#2563EB] shadow-2xs border border-[#BFDBFE]/80 font-medium'
               : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] border border-transparent'
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-[20px] sm:text-[22px]">home</span>
         </button>
@@ -109,11 +112,10 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onNavigate('alerts-notifications')}
           title="Alerts & Notifications"
           aria-label="Alerts & Notifications"
-          className={`relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${
-            isAlertsActive
+          className={`relative flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl transition-all cursor-pointer ${isAlertsActive
               ? 'bg-[#EFF6FF] text-[#2563EB] shadow-2xs border border-[#BFDBFE]/80 font-medium'
               : 'text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] border border-transparent'
-          }`}
+            }`}
         >
           <span className="material-symbols-outlined text-[20px] sm:text-[22px]">notifications</span>
           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white"></span>
@@ -162,20 +164,24 @@ export const Header: React.FC<HeaderProps> = ({
 
 
                 <div className="space-y-0.5 text-body-sm text-[#334155]">
-                  <button
-                    onClick={() => { setProfileOpen(false); onNavigate('user-management'); }}
-                    className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-between transition-colors"
-                  >
-                    <span>User Management</span>
-                    <span className="material-symbols-outlined text-[16px] text-[#64748B]">chevron_right</span>
-                  </button>
-                  <button
-                    onClick={() => { setProfileOpen(false); onNavigate('system-settings'); }}
-                    className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-between transition-colors"
-                  >
-                    <span>System Management</span>
-                    <span className="material-symbols-outlined text-[16px] text-[#64748B]">chevron_right</span>
-                  </button>
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => { setProfileOpen(false); onNavigate('user-management'); }}
+                        className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-between transition-colors"
+                      >
+                        <span>User Management</span>
+                        <span className="material-symbols-outlined text-[16px] text-[#64748B]">chevron_right</span>
+                      </button>
+                      <button
+                        onClick={() => { setProfileOpen(false); onNavigate('system-settings'); }}
+                        className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-between transition-colors"
+                      >
+                        <span>System Management</span>
+                        <span className="material-symbols-outlined text-[16px] text-[#64748B]">chevron_right</span>
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => { setProfileOpen(false); onNavigate('alerts-notifications'); }}
                     className="w-full text-left px-2 py-2 rounded-lg hover:bg-[#F1F5F9] flex items-center justify-between transition-colors"
@@ -190,6 +196,25 @@ export const Header: React.FC<HeaderProps> = ({
                     <span>HDI Data Sources</span>
                     <span className="material-symbols-outlined text-[16px] text-[#64748B]">chevron_right</span>
                   </button>
+
+                  {/* Quick Role Tester: easily toggle between Admin/Admin+User and Only User */}
+                  <div className="pt-2 mt-2 border-t border-slate-100 flex items-center justify-between px-1">
+                    <span className="text-[10px] text-slate-500 font-medium">Test Role:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newRoles = isAdmin ? ['Member'] : ['Admin', 'Member'];
+                        const newRole = isAdmin ? 'User' : 'Admin';
+                        const updated = { ...(user || {}), role: newRole, roles: newRoles };
+                        localStorage.setItem('auth_user', JSON.stringify(updated));
+                        window.dispatchEvent(new Event('auth-role-changed'));
+                        setProfileOpen(false);
+                      }}
+                      className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors cursor-pointer"
+                    >
+                      {isAdmin ? 'Switch to "Only User"' : 'Switch to "Admin+User"'}
+                    </button>
+                  </div>
 
                   {/* Dedicated Logout Option */}
                   <div className="pt-1 mt-1 border-t border-[#E2E8F0]">

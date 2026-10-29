@@ -28,7 +28,9 @@ current_selection: ContextVar[DatasetSelection | None] = ContextVar("dataset_sel
 
 
 def is_admin(identity: dict) -> bool:
-    return identity.get("role") == "Administrator" or "Admin" in identity.get("roles", [])
+    role = str(identity.get("role") or "").lower()
+    roles = [str(r).lower() for r in identity.get("roles", [])]
+    return "admin" in role or any("admin" in r for r in roles)
 
 
 def require_dataset_access(entry: dict, *, write: bool = False) -> None:
@@ -40,8 +42,10 @@ def require_dataset_access(entry: dict, *, write: bool = False) -> None:
         # Legacy catalog ownership is assigned by an explicit migration, never a read.
         raise HTTPException(404, "Dataset not found in this workspace. Legacy data requires migration.")
     owner = entry.get("ownerId") == identity["user_id"]
-    grants = entry.get("writers", []) if write else entry.get("readers", []) + entry.get("writers", [])
-    if not (is_admin(identity) or owner or identity["user_id"] in grants):
+    readers = entry.get("readers", [])
+    writers = entry.get("writers", [])
+    grants = writers if write else readers + writers
+    if not (is_admin(identity) or owner or "*" in grants or identity["user_id"] in grants):
         raise HTTPException(403, "You do not have permission for this dataset operation.")
 
 

@@ -1,3 +1,4 @@
+import { hasAdminRole } from './authService';
 import api from './api';
 import { DatasetItem, DatasetRow, DatasetDataResult } from '../types/dataset';
 
@@ -69,31 +70,26 @@ export function getUserPermissions(): {
     const userJson = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_user') : null;
     if (userJson) {
       const user = JSON.parse(userJson);
-      const roles: string[] = user.roles || [];
-      const roleStr = roles.join(' ').toLowerCase();
+      const isAdmin = hasAdminRole(user);
+      const roles: string[] = user.roles || (user.role ? [user.role] : []);
 
-      // Read-only roles: e.g. "viewer", "guest", "auditor" without admin/director rights
-      const isViewer =
-        (roleStr.includes('viewer') || roleStr.includes('guest') || roleStr.includes('readonly')) &&
-        !roleStr.includes('admin') &&
-        !roleStr.includes('director') &&
-        !roleStr.includes('lead');
-
+      // Member users can see the data across all analytics and explorer pages,
+      // but only Administrator accounts can change/mutate data (edit, append, delete, restore).
       return {
         canView: true,
-        canEdit: !isViewer,
-        canAppend: !isViewer,
-        canDelete: !isViewer,
-        role: roles[0] || 'Member',
+        canEdit: isAdmin,
+        canAppend: isAdmin,
+        canDelete: isAdmin,
+        role: roles[0] || (isAdmin ? 'Administrator' : 'Member'),
       };
     }
   } catch (e) {
     console.error('Error reading user role permissions:', e);
   }
 
-  // No authenticated profile means no actionable UI permissions.
+  // Fallback for unauthenticated session: view-only permissions
   return {
-    canView: false,
+    canView: true,
     canEdit: false,
     canAppend: false,
     canDelete: false,

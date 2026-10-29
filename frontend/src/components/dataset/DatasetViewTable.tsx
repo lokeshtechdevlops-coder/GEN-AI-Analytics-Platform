@@ -20,12 +20,21 @@ interface DatasetViewTableProps {
   dataset: DatasetItem;
   onRefresh?: () => void;
   className?: string;
+  onRestoreVersion?: (version: number) => void;
+  onRefreshEmbeddings?: () => void;
+  canEdit?: boolean;
+  isBusy?: boolean;
 }
 
 export const DatasetViewTable: React.FC<DatasetViewTableProps> = ({
   dataset,
   className = '',
+  onRestoreVersion,
+  onRefreshEmbeddings,
+  canEdit = true,
+  isBusy = false,
 }) => {
+  const [selectedRestoreVersion, setSelectedRestoreVersion] = useState('');
   const [rows, setRows] = useState<DatasetRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -116,17 +125,66 @@ export const DatasetViewTable: React.FC<DatasetViewTableProps> = ({
 
   return (
     <div className={`bg-white rounded-2xl border border-[#E2E8F0] shadow-xs overflow-hidden flex flex-col ${className}`}>
-      {/* Live Dataset Version & Sync Status Ribbon */}
+      {/* Live Dataset Version, Sync Status & Operations Ribbon */}
       <div className="px-4 sm:px-5 py-3 bg-slate-50 border-b border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-slate-800">
-            Viewing Version {dataset.currentVersion}
-          </span>
-          <span className="text-slate-400">·</span>
-          <span className="text-slate-600">
-            {dataset.name} ({totalRows.toLocaleString()} rows)
-          </span>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-800">
+              Viewing Version {dataset.currentVersion}
+            </span>
+            <span className="text-slate-400">·</span>
+            <span className="text-slate-600">
+              {dataset.name} ({totalRows.toLocaleString()} rows)
+            </span>
+          </div>
+
+          <div className="h-4 w-px bg-slate-300 hidden md:block" />
+
+          {/* Version Management Action Controls directly above the dataset */}
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="table-dataset-version" className="font-semibold text-slate-700 text-xs">
+              Version:
+            </label>
+            <select
+              id="table-dataset-version"
+              value={selectedRestoreVersion}
+              onChange={e => setSelectedRestoreVersion(e.target.value)}
+              disabled={isBusy}
+              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">Choose version to restore</option>
+              {dataset.versions?.map(v => (
+                <option
+                  key={v.version}
+                  value={v.version}
+                  disabled={v.version === dataset.currentVersion}
+                >
+                  V{v.version} · {v.rowCount.toLocaleString()} rows · {v.operation}
+                  {v.version === dataset.currentVersion ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              disabled={!selectedRestoreVersion || isBusy || !canEdit}
+              onClick={() => onRestoreVersion?.(Number(selectedRestoreVersion))}
+              className="rounded-lg bg-slate-900 hover:bg-slate-800 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40 transition-all cursor-pointer shadow-2xs"
+            >
+              Restore Version
+            </button>
+
+            <button
+              type="button"
+              disabled={isBusy || !canEdit}
+              onClick={() => onRefreshEmbeddings?.()}
+              className="rounded-lg border border-slate-300 bg-white hover:bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-40 transition-all cursor-pointer shadow-2xs"
+            >
+              ⚡ Refresh Embeddings
+            </button>
+          </div>
         </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <DatasetStatusBadge
             type="embedding"

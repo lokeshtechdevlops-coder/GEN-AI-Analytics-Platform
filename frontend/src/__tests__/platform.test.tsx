@@ -1,9 +1,11 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import api from '../services/api';
 import { Sidebar } from '../components/Sidebar';
 import { ExecutiveDashboard } from '../screens/ExecutiveDashboard';
+import { GraphStudio } from '../screens/GraphStudio';
+import { AnalyticsWidget } from '../components/AnalyticsWidget';
 import { generateCustomGraph } from '../services/graphService';
 import { contextHeaders, selectContext, selectedContext } from '../services/executionContext';
 
@@ -16,12 +18,112 @@ beforeEach(() => { vi.resetAllMocks(); localStorage.clear(); sessionStorage.clea
 afterEach(cleanup);
 
 describe('Platform correctness and navigation', () => {
-  it('keeps System Management last and has no top-level cloud configuration entries', () => {
-    render(<Sidebar activePath="executive-dashboard" onNavigate={vi.fn()} isOpen onClose={vi.fn()} />);
-    const navigation = within(screen.getByRole('navigation')).getAllByRole('button');
-    expect(navigation[navigation.length - 1].textContent).toContain('System Management');
+  it('shows Administration and System Management for Admin or Admin+User and has no top-level cloud configuration entries', () => {
+    render(<Sidebar activePath="executive-dashboard" onNavigate={vi.fn()} isOpen onClose={vi.fn()} user={{ role: 'Admin', roles: ['Admin'] }} />);
+    expect(screen.getByText('Administration')).toBeTruthy();
+    expect(screen.getByText('System Management')).toBeTruthy();
     expect(screen.queryByText('System Settings')).toBeNull();
     expect(screen.queryByRole('button', { name: /AWS|Azure|GCP/ })).toBeNull();
+  });
+
+  it('hides Administration section when user is only a user', () => {
+    render(<Sidebar activePath="executive-dashboard" onNavigate={vi.fn()} isOpen onClose={vi.fn()} user={{ role: 'User', roles: ['User'] }} />);
+    expect(screen.queryByText('Administration')).toBeNull();
+    expect(screen.queryByText('System Management')).toBeNull();
+    expect(screen.queryByText('AI Agents')).toBeNull();
+    expect(screen.queryByText('Users')).toBeNull();
+  });
+
+  it('shows Administration section for Admin+User', () => {
+    render(<Sidebar activePath="executive-dashboard" onNavigate={vi.fn()} isOpen onClose={vi.fn()} user={{ role: 'Admin+User', roles: ['Admin', 'Member'] }} />);
+    expect(screen.getByText('Administration')).toBeTruthy();
+    expect(screen.getByText('System Management')).toBeTruthy();
+  });
+
+  it('restricts widget publishing in Graph Studio for only user', async () => {
+    selectContext({ datasetId: 'sales', version: 1, semanticRevision: 1 });
+    vi.mocked(api.get).mockImplementation(((url: string) => {
+      if (url.includes('/semantics')) {
+        return Promise.resolve({ data: [{ revision: 1, status: 'approved', fields: [] }] });
+      }
+      if (url.includes('/recommendations')) {
+        return Promise.resolve({
+          data: [{
+            id: 'kpi_1',
+            revision: 1,
+            title: 'Monthly Net Revenue',
+            status: 'approved',
+            kind: 'kpi',
+            query_plan: { metric: 'NetRevenue', aggregation: 'SUM' },
+          }],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    }) as any);
+
+    render(<GraphStudio onNavigate={vi.fn()} user={{ role: 'User', roles: ['User'] }} />);
+    expect(await screen.findByText('Monthly Net Revenue')).toBeTruthy();
+    expect(screen.getByText('Publishing (Admin Only)')).toBeTruthy();
+    expect(screen.queryByText('Include on Dashboard')).toBeNull();
+    expect(screen.getByText('Publishing Restricted to Administrators')).toBeTruthy();
+  });
+
+  it('allows widget publishing in Graph Studio for Admin or Admin+User', async () => {
+    selectContext({ datasetId: 'sales', version: 1, semanticRevision: 1 });
+    vi.mocked(api.get).mockImplementation(((url: string) => {
+      if (url.includes('/semantics')) {
+        return Promise.resolve({ data: [{ revision: 1, status: 'approved', fields: [] }] });
+      }
+      if (url.includes('/recommendations')) {
+        return Promise.resolve({
+          data: [{
+            id: 'kpi_1',
+            revision: 1,
+            title: 'Monthly Net Revenue',
+            status: 'approved',
+            kind: 'kpi',
+            query_plan: { metric: 'NetRevenue', aggregation: 'SUM' },
+          }],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    }) as any);
+
+    render(<GraphStudio onNavigate={vi.fn()} user={{ role: 'Admin+User', roles: ['Admin', 'Member'] }} />);
+    expect(await screen.findByText('Monthly Net Revenue')).toBeTruthy();
+    expect(screen.getByText('Include on Dashboard')).toBeTruthy();
+    expect(screen.queryByText('Publishing (Admin Only)')).toBeNull();
+    expect(screen.getByText('No widgets selected for Executive Dashboard')).toBeTruthy();
+  });
+
+  it('renders scatter chart without error even when only one numeric measure is present', () => {
+    const definition = {
+      id: 'net_rev_scatter',
+      title: 'Monthly Net Revenue',
+      kind: 'scatter',
+      revision: 1,
+      semantic_revision: 1,
+      query_plan: { metric: 'NetRevenue', dimension: 'MonthName' },
+      dependencies: ['NetRevenue', 'MonthName'],
+      explanation: 'Monthly Net Revenue scatter test',
+      status: 'approved' as const,
+    };
+    const result = {
+      success: true,
+      data: [
+        { MonthName: 'Jan', NetRevenue: 150000 },
+        { MonthName: 'Feb', NetRevenue: 180000 },
+        { MonthName: 'Mar', NetRevenue: 210000 },
+      ],
+      summary: { formatted_value: '$540.00K' },
+      records_matched: 3,
+      execution_backend: 'pandas',
+      execution_time_ms: 1.2,
+    };
+
+    render(<AnalyticsWidget definition={definition} result={result} />);
+    expect(screen.queryByText('Scatter charts require two numeric measures.')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Monthly Net Revenue' })).toBeTruthy();
   });
 
   it('isolates dataset selection by account and carries pinned versions', () => {

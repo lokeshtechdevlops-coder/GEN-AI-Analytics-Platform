@@ -39,10 +39,8 @@ class DatasetContextMiddleware:
                 catalog = await run_in_threadpool(dataset_service._catalog)
                 dataset_id = headers.get("x-dataset-id")
                 if not dataset_id:
-                    datasets = catalog.get("datasets", {})
-                    if datasets:
-                        active_dataset = next((d for d in datasets.values() if d.get("isActive")), next(iter(datasets.values())))
-                        dataset_id = active_dataset["id"]
+                    if path == "/api/dashboard" and catalog.get("activeDatasetId"):
+                        dataset_id = catalog.get("activeDatasetId")
                     else:
                         raise HTTPException(409, "Select a dataset and version before requesting analytics.")
                 entry = await run_in_threadpool(dataset_service._entry, catalog, dataset_id)

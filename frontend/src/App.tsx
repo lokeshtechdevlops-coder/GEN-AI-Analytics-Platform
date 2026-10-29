@@ -14,6 +14,7 @@ import { selectedContext, ensureDefaultContext } from './services/executionConte
 
 const ExecutiveDashboard = lazy(() => import('./screens/ExecutiveDashboard').then(m => ({ default: m.ExecutiveDashboard })));
 const GraphStudio = lazy(() => import('./screens/GraphStudio').then(m => ({ default: m.GraphStudio })));
+const AIAgents = lazy(() => import('./screens/AIAgents').then(m => ({ default: m.AIAgents })));
 const RAGChat = lazy(() => import('./screens/RAGChat').then(m => ({ default: m.RAGChat })));
 const DatasetIngestion = lazy(() => import('./screens/DatasetIngestion').then(m => ({ default: m.DatasetIngestion })));
 const DataExplorer = lazy(() => import('./screens/DataExplorer').then(m => ({ default: m.DataExplorer })));
@@ -33,7 +34,14 @@ const ScreenFallback = () => (
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentUser, setCurrentUser] = useState<UserContext | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserContext | null>(() => {
+    try {
+      const cached = localStorage.getItem('auth_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [activePath, setActivePath] = useState<string>('executive-dashboard');
   const [hasOpenedChat, setHasOpenedChat] = useState(false);
@@ -44,6 +52,19 @@ export default function App() {
 
   useEffect(() => {
     void ensureDefaultContext();
+  }, []);
+
+  useEffect(() => {
+    const onRoleChanged = () => {
+      try {
+        const cached = localStorage.getItem('auth_user');
+        if (cached) setCurrentUser(JSON.parse(cached));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('auth-role-changed', onRoleChanged);
+    return () => window.removeEventListener('auth-role-changed', onRoleChanged);
   }, []);
 
   useEffect(() => {
@@ -105,6 +126,9 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatMaximized, setIsChatMaximized] = useState(false);
+
   const [customGraphPrompt, setCustomGraphPrompt] = useState<string>(
     ''
   );
@@ -118,7 +142,17 @@ export default function App() {
       setSystemTab(path.endsWith('/connections') ? 'Connections' : 'Sync Jobs');
       path = 'system-settings';
     }
-    if (path === 'ai-dashboards-rag-chat') setHasOpenedChat(true);
+    if (path === 'ai-dashboards-rag-chat') {
+      setHasOpenedChat(true);
+      setIsChatOpen(true);
+      setSidebarOpen(false);
+      return;
+    }
+    if (path === 'upload-dataset') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('datasetId');
+      window.history.replaceState({}, '', url.toString());
+    }
     setActivePath(path);
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -130,6 +164,8 @@ export default function App() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setHasOpenedChat(false);
+    setIsChatOpen(false);
+    setIsChatMaximized(false);
     setActivePath('enterprise-signin');
     setSidebarOpen(false);
     // Only redirect if an external AppRouter URL is explicitly configured
@@ -167,7 +203,6 @@ export default function App() {
   };
 
   const isAuthPage = !isAuthenticated || activePath === 'enterprise-signin' || activePath === 'enterprisesignin';
-  const isChat = activePath === 'ai-dashboards-rag-chat';
 
   if (isCheckingSession) {
     return (
@@ -217,62 +252,137 @@ export default function App() {
 
       {/* Main Content Area - Fluidly & Automatically Determined for Every Screen & Aspect Ratio */}
       <div className="pl-0 lg:pl-[260px] w-full flex-1 transition-all duration-300">
-        <main
-          className={`w-full pt-[60px] sm:pt-[72px] bg-[#F8FAFC] ${isChat
-              ? 'h-[100dvh] overflow-hidden pb-14 sm:pb-16 lg:pb-0 flex flex-col'
-              : 'min-h-screen min-h-dvh pb-24 lg:pb-12'
-            }`}
-        >
+        <main className="w-full pt-[60px] sm:pt-[72px] bg-[#F8FAFC] min-h-screen min-h-dvh pb-24 lg:pb-12">
           <Suspense fallback={<ScreenFallback />}>
-            {/* Remount conversations when their data context changes. */}
-            <div className={`flex-1 w-full max-w-[1600px] mx-auto p-2 sm:p-3 lg:p-4 overflow-hidden flex-col ${isChat ? 'flex' : 'hidden'}`}>
-              {hasOpenedChat && <RAGChat key={`${currentUser?.user_id}:${datasetScope}`} onNavigate={handleNavigate} isActive={isChat} />}
+            <div key={datasetScope} className="max-w-[1440px] mx-auto p-margin">
+              {activePath === 'executive-dashboard' && (
+                <ExecutiveDashboard onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'build-your-kpi-graph-studio' && (
+                <GraphStudio
+                  onNavigate={handleNavigate}
+                  user={currentUser}
+                />
+              )}
+
+              {activePath === 'ai-agents' && (
+                <AIAgents onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'upload-dataset' && (
+                <DatasetIngestion onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'data-explorer' && (
+                <DataExplorer onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'alerts-notifications' && (
+                import.meta.env.VITE_DEMO_MODE === 'true' ? <AlertsNotifications onNavigate={handleNavigate} /> : <p className="p-6 bg-white rounded-xl text-slate-600">No alert rules are configured. Configure and validate source data before enabling alerts.</p>
+              )}
+
+              {activePath === 'reports-library' && (
+                import.meta.env.VITE_DEMO_MODE === 'true' ? <ReportsLibrary onNavigate={handleNavigate} /> : <p className="p-6 bg-white rounded-xl text-slate-600">No saved reports are available. Review analytics in Graph Studio and publish approved dashboard widgets.</p>
+              )}
+
+              {activePath === 'data-sources' && (
+                <DataSources onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'user-management' && (
+                <UserManagement onNavigate={handleNavigate} />
+              )}
+
+              {activePath === 'system-settings' && (
+                <SystemSettings key={systemTab} initialTab={systemTab} onNavigate={handleNavigate} />
+              )}
             </div>
-
-            {!isChat && (
-              <div key={datasetScope} className="max-w-[1440px] mx-auto p-margin">
-                {activePath === 'executive-dashboard' && (
-                  <ExecutiveDashboard onNavigate={handleNavigate} />
-                )}
-
-                {activePath === 'build-your-kpi-graph-studio' && (
-                  <GraphStudio
-                    onNavigate={handleNavigate}
-                  />
-                )}
-
-                {activePath === 'upload-dataset' && (
-                  <DatasetIngestion onNavigate={handleNavigate} />
-                )}
-
-                {activePath === 'data-explorer' && (
-                  <DataExplorer onNavigate={handleNavigate} />
-                )}
-
-                {activePath === 'alerts-notifications' && (
-                  import.meta.env.VITE_DEMO_MODE === 'true' ? <AlertsNotifications onNavigate={handleNavigate} /> : <p className="p-6 bg-white rounded-xl text-slate-600">No alert rules are configured. Configure and validate source data before enabling alerts.</p>
-                )}
-
-                {activePath === 'reports-library' && (
-                  import.meta.env.VITE_DEMO_MODE === 'true' ? <ReportsLibrary onNavigate={handleNavigate} /> : <p className="p-6 bg-white rounded-xl text-slate-600">No saved reports are available. Review analytics in Graph Studio and publish approved dashboard widgets.</p>
-                )}
-
-                {activePath === 'data-sources' && (
-                  <DataSources onNavigate={handleNavigate} />
-                )}
-
-                {activePath === 'user-management' && (
-                  <UserManagement onNavigate={handleNavigate} />
-                )}
-
-                {activePath === 'system-settings' && (
-                  <SystemSettings key={systemTab} initialTab={systemTab} onNavigate={handleNavigate} />
-                )}
-              </div>
-            )}
           </Suspense>
         </main>
       </div>
+
+      {/* Floating RAG Chat Circular Trigger Button (Bottom Right) - Only visible when chat is closed */}
+      {!isChatOpen && (
+        <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-50 flex items-center gap-3 select-none animate-in fade-in duration-200">
+          {/* Helper pill indicator visible when chat is closed */}
+          <button
+            type="button"
+            onClick={() => {
+              setHasOpenedChat(true);
+              setIsChatOpen(true);
+            }}
+            className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 backdrop-blur-md border border-purple-200 text-[#0F172A] shadow-lg hover:shadow-xl hover:border-purple-400 transition-all duration-200 text-xs font-medium cursor-pointer group animate-in fade-in slide-in-from-right-3"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-semibold bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 bg-clip-text text-transparent">
+              RAG Copilot
+            </span>
+            <span className="text-slate-400 font-mono text-[10px]">Ask HANA</span>
+          </button>
+
+          {/* Circular Action Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setHasOpenedChat(true);
+              setIsChatOpen(true);
+            }}
+            aria-label="Open RAG Copilot"
+            title="Open RAG Copilot"
+            className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-white shadow-2xl transition-all duration-300 cursor-pointer active:scale-95 group focus:outline-none focus:ring-4 focus:ring-purple-400/40 bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-indigo-500 hover:scale-105 border-2 border-white/40 shadow-purple-500/30"
+          >
+            {/* Animated glow on hover */}
+            <span className="absolute inset-0 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300" />
+
+            {/* Chat Symbol Icon */}
+            <span className="material-symbols-outlined text-[26px] sm:text-[28px] relative z-10 transition-transform duration-200">
+              chat
+            </span>
+
+            {/* Active Status Pulse Indicator */}
+            <span className="absolute top-0 right-0 flex h-4 w-4 -mt-0.5 -mr-0.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white shadow-xs" />
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Floating Chat Modal / Drawer */}
+      <div
+        className={`fixed z-50 transition-all duration-300 ease-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col ${
+          isChatOpen
+            ? 'opacity-100 scale-100 pointer-events-auto translate-y-0'
+            : 'opacity-0 scale-95 pointer-events-none translate-y-6'
+        } ${
+          isChatMaximized
+            ? 'inset-2 sm:inset-6'
+            : 'bottom-20 lg:bottom-6 right-2 sm:right-6 w-[calc(100vw-16px)] sm:w-[500px] xl:w-[560px] h-[calc(100vh-100px)] sm:h-[720px] max-h-[calc(100vh-100px)] lg:max-h-[calc(100vh-48px)]'
+        }`}
+      >
+        {hasOpenedChat && (
+          <Suspense fallback={<ScreenFallback />}>
+            <RAGChat
+              key={`${currentUser?.user_id}:${datasetScope}`}
+              onNavigate={handleNavigate}
+              isActive={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+              onToggleMaximize={() => setIsChatMaximized(prev => !prev)}
+              isMaximized={isChatMaximized}
+            />
+          </Suspense>
+        )}
+      </div>
+
+      {/* Dimmed backdrop when maximized */}
+      {isChatOpen && isChatMaximized && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 transition-opacity duration-300"
+          onClick={() => setIsChatMaximized(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Mobile / Tablet Bottom Ergonomic Navigation Bar (Hidden on desktop) */}
       <MobileBottomNav
