@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../services/api';
 import { ensureDefaultContext } from '../services/executionContext';
-import { AnalyticsWidget } from '../components/AnalyticsWidget';
+import { AnalyticsWidget, formatTableCell } from '../components/AnalyticsWidget';
 import { AnalyticsDefinition, ExecutionResult } from '../services/semanticService';
 
 export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) => void }) {
@@ -37,14 +37,14 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
   const approvedCount = widgets.filter(w => w.definition.status === 'approved').length;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-16">
+    <div className="space-y-6 w-full max-w-[1560px] mx-auto pb-24">
       {/* Page Header */}
-      <div className="flex flex-wrap justify-between items-start gap-4 pb-2 border-b border-slate-200/80">
+      <div className="flex flex-wrap justify-between items-start gap-4 pb-4 border-b border-slate-200/80">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              EXECUTIVE ANALYTICS · LIVE INSIGHTS
+              Executive Analytics · Live Insights
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
@@ -69,7 +69,7 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
           <button
             disabled={loading}
             onClick={() => void load()}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-700 font-medium text-xs sm:text-sm border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-slate-700 font-medium text-xs sm:text-sm border border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-xs disabled:opacity-50 cursor-pointer"
           >
             <span className={`material-symbols-outlined text-[16px] text-blue-600 ${loading ? 'animate-spin' : ''}`}>
               {loading ? 'sync' : 'refresh'}
@@ -81,7 +81,7 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
 
       {/* Error Alert */}
       {error && (
-        <div role="alert" className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm">
+        <div role="alert" className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 shadow-xs">
           <span className="material-symbols-outlined text-red-600 text-xl mt-0.5">error</span>
           <div className="flex-1">
             <p className="text-sm font-medium text-red-800">{error}</p>
@@ -94,7 +94,7 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
 
       {/* Empty State */}
       {dashboard && !dashboard.widgets.length && (
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center space-y-4 shadow-sm">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center space-y-4 shadow-xs">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <span className="material-symbols-outlined text-3xl">insights</span>
           </div>
@@ -105,7 +105,7 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
             </p>
           </div>
           <button
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-xs font-semibold shadow-sm transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-xs font-semibold shadow-xs transition-all cursor-pointer"
             onClick={() => onNavigate('build-your-kpi-graph-studio')}
           >
             <span className="material-symbols-outlined text-[18px]">add_chart</span>
@@ -114,13 +114,13 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
         </div>
       )}
 
-      {/* KPI Cards Row (Clean, compact, no vertical void) */}
+      {/* KPI Cards (Compact, focused cards without full-width stretching) */}
       {kpiWidgets.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="flex flex-wrap gap-4">
           {kpiWidgets.map(({ definition, result }) => (
             <div
               key={`${definition.id}:${definition.revision}`}
-              className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+              className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs hover:shadow-sm transition-all w-full sm:w-72 md:w-80 flex flex-col justify-between"
             >
               <div className="flex items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-500 truncate">
@@ -147,10 +147,10 @@ export function ExecutiveDashboard({ onNavigate }: { onNavigate: (path: string) 
           {chartWidgets.map(({ definition, result }) => (
             <section
               key={`${definition.id}:${definition.revision}`}
-              className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all space-y-4"
+              className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:shadow-sm transition-all space-y-4"
             >
               {/* Clean Widget Header */}
-              <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <h2 className="text-base font-bold text-slate-900 truncate">
                     {definition.title}

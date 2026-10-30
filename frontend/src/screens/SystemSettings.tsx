@@ -150,7 +150,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full max-w-[1560px] mx-auto pb-28">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80">
         <div>
@@ -228,7 +228,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Connection Name</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Connection Name</label>
                 <input
                   className={inputClass}
                   placeholder="e.g. Corporate HANA Cloud"
@@ -238,7 +238,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Service Type</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Service Type</label>
                 <select
                   className={inputClass}
                   value={service}
@@ -258,7 +258,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Authentication Protocol</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Authentication Protocol</label>
                 <select
                   className={inputClass}
                   value={auth}
@@ -275,7 +275,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
               {(configFields[service] || []).map(field => (
                 <div key={field}>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     {field.replaceAll('_', ' ')}
                   </label>
                   <input
@@ -290,7 +290,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               {auth === 'oauth2_client_credentials' && (
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Token Endpoint URL</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Token Endpoint URL</label>
                     <input
                       className={inputClass}
                       placeholder="https://auth.example.com/oauth/token"
@@ -299,7 +299,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Scope</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Scope</label>
                     <input
                       className={inputClass}
                       placeholder="e.g. read:analytics"
@@ -312,7 +312,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
               {(credentialFields[auth] || []).map(field => (
                 <div key={field}>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     {field.replaceAll('_', ' ')}
                   </label>
                   <input
@@ -330,7 +330,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
             {['rest', 'odata', 's4hana', 'sac', 'soap'].includes(service) && (
               <div className="grid sm:grid-cols-2 gap-4 pt-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-xs font-medium text-slate-700 mb-1.5">
                     Response Field Mapping (JSON)
                   </label>
                   <textarea
@@ -342,7 +342,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
                 </div>
                 {service === 'soap' && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
                       Operation Parameters (JSON)
                     </label>
                     <textarea
@@ -522,7 +522,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Connection</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Connection</label>
                 <select className={inputClass} value={connectionId} onChange={e => setConnectionId(e.target.value)}>
                   <option value="">Choose an active connection</option>
                   {connections.filter(c => c.enabled).map(c => (
@@ -532,7 +532,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Source Object / Entity</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Source Object / Entity</label>
                 <input
                   className={inputClass}
                   placeholder="e.g. SalesOrders / /api/v2/items"
@@ -542,7 +542,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Binding Identifier</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Binding Identifier</label>
                 <input
                   className={inputClass}
                   placeholder="e.g. ERP_Daily_Sales"
@@ -552,7 +552,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Target Platform Dataset</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Target Platform Dataset</label>
                 <select className={inputClass} value={targetDataset} onChange={e => setTargetDataset(e.target.value)}>
                   <option value="">Auto-create dataset on first sync</option>
                   {datasets.map(d => (
@@ -562,7 +562,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Import Mode</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Import Mode</label>
                 <select className={inputClass} value={mode} onChange={e => setMode(e.target.value)}>
                   {['replace', 'append', 'upsert'].map(val => (
                     <option key={val} value={val}>{val.toUpperCase()}</option>
@@ -571,7 +571,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Duplicate Policy</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Duplicate Policy</label>
                 <select className={inputClass} value={duplicatePolicy} onChange={e => setDuplicatePolicy(e.target.value)}>
                   {['keep', 'drop', 'reject'].map(val => (
                     <option key={val} value={val}>{val.toUpperCase()}</option>
@@ -582,11 +582,11 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
               {mode === 'upsert' && (
                 <>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Stable Key Fields (CSV)</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Stable Key Fields (CSV)</label>
                     <input className={inputClass} placeholder="ID, RegionCode" value={keys} onChange={e => setKeys(e.target.value)} />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Deletion Flag Field (Optional)</label>
+                    <label className="block text-xs font-medium text-slate-700 mb-1.5">Deletion Flag Field (Optional)</label>
                     <input className={inputClass} placeholder="is_deleted" value={deletionField} onChange={e => setDeletionField(e.target.value)} />
                   </div>
                 </>
@@ -594,7 +594,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">Parsing & Transformation Rules (JSON)</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">Parsing & Transformation Rules (JSON)</label>
               <textarea
                 aria-label="Source transformation plan"
                 className={`${inputClass} font-mono text-xs`}
@@ -830,7 +830,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
           <div className="grid sm:grid-cols-2 gap-4">
             {['llm_model', 'embedding_model', 'max_tokens', 'temperature'].map(field => (
               <div key={field}>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   {field.replaceAll('_', ' ')}
                 </label>
                 <input
@@ -880,21 +880,21 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
           <div className="grid sm:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Metadata Backend</span>
+              <span className="text-[11px] font-medium text-slate-500">Metadata Backend</span>
               <p className="font-bold text-slate-900 text-sm mt-1">{storage.metadata_backend}</p>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Dataset Catalog</span>
+              <span className="text-[11px] font-medium text-slate-500">Dataset Catalog</span>
               <p className="font-bold text-slate-900 text-sm mt-1">{storage.dataset_backend}</p>
             </div>
             <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Object Store</span>
+              <span className="text-[11px] font-medium text-slate-500">Object Store</span>
               <p className="font-bold text-slate-900 text-sm mt-1">{storage.object_backend}</p>
             </div>
           </div>
 
           <div className="max-w-md">
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-medium text-slate-700 mb-1.5">
               Maximum Retained Versions (0 retains all)
             </label>
             <input

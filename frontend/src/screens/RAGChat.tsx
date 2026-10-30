@@ -827,7 +827,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[20px] text-[#7C3AED]">insert_chart</span>
                 <h3 className="font-headline-sm text-sm sm:text-base text-[#0F172A] font-semibold">
-                  {previewGraphModalUrl.title ? `${previewGraphModalUrl.title.toUpperCase()} Visualization` : 'SAP AI Core Graph Generation'}
+                  {previewGraphModalUrl.title ? `${previewGraphModalUrl.title.charAt(0).toUpperCase() + previewGraphModalUrl.title.slice(1)} Visualization` : 'SAP AI Core Graph Generation'}
                 </h3>
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full border border-[#DDD6FE]">
                   SAP AI Core
@@ -1387,7 +1387,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 font-label-md text-xs font-semibold text-[#0F172A]">
                               <span className="material-symbols-outlined text-[17px] text-[#7C3AED]">analytics</span>
-                              <span>{msg.chart_type ? `${msg.chart_type.toUpperCase()} Chart` : 'Generated Analytics Visualization'}</span>
+                              <span>{msg.chart_type ? `${msg.chart_type.charAt(0).toUpperCase() + msg.chart_type.slice(1)} Chart` : 'Generated Analytics Visualization'}</span>
                             </div>
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full border border-[#DDD6FE]">
                               SAP AI Core

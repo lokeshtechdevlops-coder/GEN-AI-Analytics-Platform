@@ -147,13 +147,13 @@ export const DataExplorer: React.FC<{ onNavigate: (path: string) => void }> = ({
   const dimensionOptions = model?.fields.filter(f => f.role !== 'measure').map(f => ({ value: f.name, label: f.semantic_name })) ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-[1560px] mx-auto pb-28">
       {/* Page Header */}
       <div>
         <div className="flex items-center gap-2 mb-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            STRUCTURED ANALYTICS · QUERY ENGINE
+            Structured Analytics · Query Engine
           </span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Data Explorer</h1>

@@ -20,14 +20,14 @@ export const DataSources: React.FC<{ onNavigate: (path: string) => void }> = ({ 
   const readyCount = datasets.filter(d => d.embeddingStatus === 'Ready').length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-[1560px] mx-auto pb-28">
       {/* Page Header */}
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              DATA CATALOG · ENTERPRISE SOURCES
+            <span className="text-[11px] font-semibold tracking-wide text-slate-500">
+              Data Catalog · Enterprise Sources
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
@@ -58,7 +58,7 @@ export const DataSources: React.FC<{ onNavigate: (path: string) => void }> = ({ 
             <div key={stat.label} className="bg-white border border-slate-200/80 rounded-xl p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
               <div className="flex items-center gap-2 mb-2">
                 <span className={`material-symbols-outlined text-[18px] text-${stat.color}-600`}>{stat.icon}</span>
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{stat.label}</span>
+                <span className="text-[11px] font-semibold tracking-wide text-slate-500">{stat.label}</span>
               </div>
               <p className="text-xl font-bold tracking-tight text-slate-900 tabular-nums">{stat.value}</p>
             </div>

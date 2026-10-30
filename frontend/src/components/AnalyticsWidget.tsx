@@ -109,14 +109,14 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
   const barWidth = Math.min(32, (chartWidth / rows.length) * 0.7);
 
   // Smart label step
-  const maxLabels = 16;
+  const maxLabels = 8;
   const labelStep = rows.length > maxLabels ? Math.ceil(rows.length / maxLabels) : 1;
 
   // Gridlines
   const gridCount = 4;
   const gridValues = Array.from({ length: gridCount + 1 }, (_, i) => low + (range * i) / gridCount);
 
-  const palette = ['#3B82F6', '#0D9488', '#8B5CF6', '#EA580C', '#DB2777', '#4F46E5'];
+  const palette = ['#2563EB', '#0D9488', '#7C3AED', '#EA580C', '#0284C7', '#D97706', '#4F46E5', '#059669', '#DB2777', '#6366F1', '#0891B2', '#475569'];
 
   // Table with smart formatting and humanized column names
   const table = (
@@ -221,10 +221,143 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
             {String(result.summary?.formatted_value || formatTableCell(rows[0][valueKey] ?? 'N/A', valueKey).display)}
           </p>
         </div>
-      ) : definition.kind === 'pie' && !pieValid ? (
-        <p role="alert" className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-          Pie charts require nonnegative, nonmissing values and a positive total.
-        </p>
+) : definition.kind === 'pie' ? (
+        !pieValid ? (
+          <p role="alert" className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+            Pie charts require nonnegative, nonmissing values and a positive total.
+          </p>
+        ) : (
+          <div className="flex flex-col md:flex-row items-center gap-6 w-full py-1">
+            {/* Left: Authentic Solid Pie Chart */}
+            <div className="w-full md:w-[48%] flex flex-col items-center justify-center shrink-0">
+              <div className="relative w-56 h-56 flex items-center justify-center">
+                <svg viewBox="0 0 240 240" className="w-full h-full overflow-visible" role="img" aria-label={definition.title}>
+                  {(() => {
+                    let currentAngle = -Math.PI / 2;
+                    return rows.map((row, index) => {
+                      const value = values[index]!;
+                      if (value <= 0) return null;
+                      const sliceAngle = (value / total) * Math.PI * 2;
+                      const start = currentAngle;
+                      const end = currentAngle + sliceAngle;
+                      currentAngle = end;
+
+                      const isHovered = hoveredIndex === index;
+                      const r = isHovered ? 104 : 98;
+                      const color = palette[index % palette.length];
+                      const title = `${String(row[labelKey])}: ${formatTableCell(row[valueKey], valueKey).display} (${((value / total) * 100).toFixed(1)}%)`;
+
+                      if (value === total) {
+                        return (
+                          <circle
+                            key={index}
+                            cx={120}
+                            cy={120}
+                            r={r}
+                            fill={color}
+                            style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+                            onMouseEnter={() => setHoveredIndex(index)}
+                            onMouseLeave={() => setHoveredIndex(null)}
+                          >
+                            <title>{title}</title>
+                          </circle>
+                        );
+                      }
+
+                      const largeArc = sliceAngle > Math.PI ? 1 : 0;
+                      const x1 = 120 + r * Math.cos(start);
+                      const y1 = 120 + r * Math.sin(start);
+                      const x2 = 120 + r * Math.cos(end);
+                      const y2 = 120 + r * Math.sin(end);
+
+                      const d = `M 120 120 L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+
+                      return (
+                        <path
+                          key={index}
+                          d={d}
+                          fill={color}
+                          stroke="#FFFFFF"
+                          strokeWidth="1.5"
+                          style={{ cursor: 'pointer', transition: 'all 0.15s ease' }}
+                          onMouseEnter={() => setHoveredIndex(index)}
+                          onMouseLeave={() => setHoveredIndex(null)}
+                        >
+                          <title>{title}</title>
+                        </path>
+                      );
+                    });
+                  })()}
+                </svg>
+              </div>
+
+              {/* Active Slice Pill */}
+              {hoveredIndex !== null && rows[hoveredIndex] ? (
+                <div className="mt-2 text-center text-xs font-semibold text-slate-800 bg-slate-50 border border-slate-200/80 px-3 py-1 rounded-full animate-in fade-in">
+                  <span>{String(rows[hoveredIndex][labelKey])}: </span>
+                  <span className="text-blue-600 font-bold">{formatTableCell(rows[hoveredIndex][valueKey], valueKey).display}</span>
+                  <span className="text-slate-400 font-medium"> ({((Number(values[hoveredIndex] ?? 0) / total) * 100).toFixed(1)}%)</span>
+                </div>
+              ) : (
+                <div className="mt-2 text-center text-xs text-slate-400 font-medium py-1">
+                  Hover over any slice or list row
+                </div>
+              )}
+            </div>
+
+            {/* Right: Scrollable Data Breakdown */}
+            <div className="w-full md:w-[52%] flex flex-col min-w-0 bg-slate-50/70 rounded-xl border border-slate-200/80 p-3">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-200/70 text-xs">
+                <span className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-blue-600">pie_chart</span>
+                  <span>Data Breakdown ({rows.length})</span>
+                </span>
+                <span className="font-bold text-slate-900 tabular-nums">
+                  Total: {formatNumber(total, isCurrencyMetric)}
+                </span>
+              </div>
+
+              <div className="overflow-y-auto max-h-[195px] pr-2 space-y-1 divide-y divide-slate-100/80 scroll-touch">
+                {rows.map((row, index) => {
+                  const v = values[index] ?? 0;
+                  const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
+                  const isHovered = hoveredIndex === index;
+                  const label = String(row[labelKey] ?? `Segment ${index + 1}`);
+                  const color = palette[index % palette.length];
+
+                  return (
+                    <div
+                      key={index}
+                      onMouseEnter={() => setHoveredIndex(index)}
+                      onMouseLeave={() => setHoveredIndex(null)}
+                      className={`pt-1.5 first:pt-0 flex items-center justify-between gap-3 text-xs py-1 px-2 rounded-lg transition-colors cursor-pointer ${
+                        isHovered ? 'bg-blue-100/70 font-semibold' : 'hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 truncate">
+                        <span
+                          className="w-2.5 h-2.5 rounded-xs shrink-0"
+                          style={{ backgroundColor: color }}
+                        />
+                        <span className={`truncate ${isHovered ? 'text-blue-900 font-semibold' : 'text-slate-700 font-medium'}`} title={label}>
+                          {label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 tabular-nums text-right">
+                        <span className="font-semibold text-slate-900">
+                          {formatTableCell(row[valueKey], valueKey).display}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-medium w-12 text-right">
+                          ({pct}%)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )
       ) : (
         definition.kind !== 'table' &&
         finite.length > 0 && (
@@ -354,45 +487,6 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
                   </g>
                 );
               })
-            ) : definition.kind === 'pie' ? (
-              rows.map((row, index) => {
-                const value = values[index]!;
-                if (value === 0) return null;
-                const start = angle;
-                angle += (value / total) * Math.PI * 2;
-                const title = `${String(row[labelKey])}: ${formatTableCell(row[valueKey], valueKey).display}`;
-                const isHovered = hoveredIndex === index;
-                const cx = 300, cy = 105, r = isHovered ? 90 : 85;
-                if (value === total) {
-                  return (
-                    <circle
-                      key={index}
-                      cx={cx}
-                      cy={cy}
-                      r={r}
-                      fill={palette[index % palette.length]}
-                      style={{ cursor: 'pointer', transition: 'r 0.2s ease' }}
-                      onMouseEnter={() => setHoveredIndex(index)}
-                      onMouseLeave={() => setHoveredIndex(null)}
-                    >
-                      <title>{title}</title>
-                    </circle>
-                  );
-                }
-                const path = `M${cx},${cy} L${cx + Math.cos(start) * r},${cy + Math.sin(start) * r} A${r},${r} 0 ${angle - start > Math.PI ? 1 : 0},1 ${cx + Math.cos(angle) * r},${cy + Math.sin(angle) * r} Z`;
-                return (
-                  <path
-                    key={index}
-                    d={path}
-                    fill={palette[index % palette.length]}
-                    style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                    onMouseEnter={() => setHoveredIndex(index)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <title>{title}</title>
-                  </path>
-                );
-              })
             ) : (
               rows.map((row, index) => {
                 const value = values[index];
@@ -427,17 +521,17 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
                 const label = String(row[labelKey] ?? 'Missing');
                 // Allow up to 18 characters so "United States" is never truncated
                 const displayLabel = label.length > 18 ? label.slice(0, 17) + '…' : label;
-                if (rows.length > 8) {
+                if (rows.length > 6) {
                   return (
                     <text
                       key={index}
                       x={x(index)}
-                      y={chartBottom + 12}
+                      y={chartBottom + 14}
                       textAnchor="end"
-                      fontSize="9"
+                      fontSize="10"
                       fill="#64748B"
                       fontWeight="500"
-                      transform={`rotate(-40, ${x(index)}, ${chartBottom + 12})`}
+                      transform={`rotate(-32, ${x(index)}, ${chartBottom + 14})`}
                     >
                       {displayLabel}
                     </text>

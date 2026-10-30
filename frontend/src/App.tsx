@@ -252,9 +252,9 @@ export default function App() {
 
       {/* Main Content Area - Fluidly & Automatically Determined for Every Screen & Aspect Ratio */}
       <div className="pl-0 lg:pl-[260px] w-full flex-1 transition-all duration-300">
-        <main className="w-full pt-[60px] sm:pt-[72px] bg-[#F8FAFC] min-h-screen min-h-dvh pb-24 lg:pb-12">
+        <main className="w-full pt-16 bg-[#F8FAFC] min-h-screen min-h-dvh pb-32 lg:pb-36">
           <Suspense fallback={<ScreenFallback />}>
-            <div key={datasetScope} className="max-w-[1440px] mx-auto p-margin">
+            <div key={datasetScope} className="w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
               {activePath === 'executive-dashboard' && (
                 <ExecutiveDashboard onNavigate={handleNavigate} />
               )}
@@ -312,9 +312,9 @@ export default function App() {
               setHasOpenedChat(true);
               setIsChatOpen(true);
             }}
-            className="hidden sm:inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/95 backdrop-blur-md border border-purple-200 text-[#0F172A] shadow-lg hover:shadow-xl hover:border-purple-400 transition-all duration-200 text-xs font-medium cursor-pointer group animate-in fade-in slide-in-from-right-3"
+            className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-md border border-purple-200 text-[#0F172A] shadow-md hover:shadow-lg hover:border-purple-400 transition-all duration-200 text-xs font-medium cursor-pointer group animate-in fade-in slide-in-from-right-3"
           >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-semibold bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 bg-clip-text text-transparent">
               RAG Copilot
             </span>
@@ -330,20 +330,20 @@ export default function App() {
             }}
             aria-label="Open RAG Copilot"
             title="Open RAG Copilot"
-            className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-white shadow-2xl transition-all duration-300 cursor-pointer active:scale-95 group focus:outline-none focus:ring-4 focus:ring-purple-400/40 bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-indigo-500 hover:scale-105 border-2 border-white/40 shadow-purple-500/30"
+            className="relative w-12 h-12 sm:w-13 sm:h-13 rounded-full flex items-center justify-center text-white shadow-xl transition-all duration-300 cursor-pointer active:scale-95 group focus:outline-none focus:ring-4 focus:ring-purple-400/40 bg-gradient-to-tr from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-indigo-500 hover:scale-105 border-2 border-white/40 shadow-purple-500/25"
           >
             {/* Animated glow on hover */}
             <span className="absolute inset-0 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 opacity-0 group-hover:opacity-40 blur-md transition-opacity duration-300" />
 
             {/* Chat Symbol Icon */}
-            <span className="material-symbols-outlined text-[26px] sm:text-[28px] relative z-10 transition-transform duration-200">
+            <span className="material-symbols-outlined text-[22px] sm:text-[24px] relative z-10 transition-transform duration-200">
               chat
             </span>
 
             {/* Active Status Pulse Indicator */}
-            <span className="absolute top-0 right-0 flex h-4 w-4 -mt-0.5 -mr-0.5">
+            <span className="absolute top-0 right-0 flex h-3.5 w-3.5 -mt-0.5 -mr-0.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white shadow-xs" />
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white shadow-xs" />
             </span>
           </button>
         </div>

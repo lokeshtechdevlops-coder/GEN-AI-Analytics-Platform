@@ -62,13 +62,13 @@ export const AlertsNotifications: React.FC<AlertsNotificationsProps> = ({ onNavi
   };
 
   return (
-    <div className="flex flex-col w-full gap-space-xl">
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto space-y-6 pb-28">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span>
             <span className="font-label-sm uppercase tracking-widest text-[#64748B] font-semibold">
-              REAL-TIME MONITORING · SAP HANA HEALTH
+              Real-Time Monitoring · SAP HANA Health
             </span>
           </div>
           <h1 className="font-headline-xl text-[#0F172A] font-semibold tracking-tight">

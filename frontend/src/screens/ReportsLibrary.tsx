@@ -62,13 +62,13 @@ export const ReportsLibrary: React.FC<ReportsLibraryProps> = ({ onNavigate }) =>
   };
 
   return (
-    <div className="flex flex-col w-full gap-space-xl">
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto space-y-6 pb-28">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span>
             <span className="font-label-sm uppercase tracking-widest text-[#64748B] font-semibold">
-              ENTERPRISE REPORTING · SAP BTP DISPATCH
+              Enterprise Reporting · SAP BTP Dispatch
             </span>
           </div>
           <h1 className="font-headline-xl text-[#0F172A] font-semibold tracking-tight">
@@ -98,7 +98,7 @@ export const ReportsLibrary: React.FC<ReportsLibraryProps> = ({ onNavigate }) =>
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-[#64748B]">
+                <span className="text-xs font-semibold text-slate-500">
                   {rep.type}
                 </span>
                 <span className="text-xs font-mono text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded-md border border-[#E2E8F0]">{rep.period}</span>

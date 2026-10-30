@@ -247,7 +247,7 @@ export const DatasetIngestion: React.FC<DatasetIngestionProps> = ({ onNavigate }
   });
 
   return (
-    <div className="flex flex-col w-full gap-6 max-w-7xl mx-auto pb-16">
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto gap-6 pb-28">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80">
         <div>

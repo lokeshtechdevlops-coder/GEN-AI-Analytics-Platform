@@ -203,14 +203,14 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="flex flex-col w-full gap-space-xl pb-16">
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto space-y-6 pb-28">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#7C3AED] animate-pulse"></span>
             <span className="font-label-sm uppercase tracking-widest text-[#64748B] font-semibold">
-              AUTONOMOUS INTELLIGENCE · MULTI-AGENT ORCHESTRATION
+              Autonomous Intelligence · Multi-Agent Orchestration
             </span>
           </div>
           <h1 className="font-headline-xl text-[#0F172A] font-semibold tracking-tight flex items-center gap-3">
@@ -249,7 +249,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 font-mono">Agent Pool</span>
+            <span className="text-xs font-medium text-slate-500 font-medium">Agent Pool</span>
             <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[18px]">smart_toy</span>
             </div>
@@ -265,7 +265,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 font-mono">Tasks Automated</span>
+            <span className="text-xs font-medium text-slate-500 font-medium">Tasks Automated</span>
             <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[18px]">bolt</span>
             </div>
@@ -281,7 +281,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 font-mono">Grounded Accuracy</span>
+            <span className="text-xs font-medium text-slate-500 font-medium">Grounded Accuracy</span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[18px]">verified</span>
             </div>
@@ -296,7 +296,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
 
         <div className="p-5 rounded-2xl bg-white border border-slate-200/90 shadow-xs flex flex-col justify-between hover:border-slate-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 font-mono">Avg Pipeline Latency</span>
+            <span className="text-xs font-medium text-slate-500 font-medium">Avg Pipeline Latency</span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <span className="material-symbols-outlined text-[18px]">speed</span>
             </div>
@@ -508,7 +508,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
 
             <div className="space-y-3.5 text-xs">
               <div>
-                <span className="text-slate-400 uppercase tracking-wider text-[10px] font-mono font-semibold block mb-1">Execution Engine</span>
+                <span className="text-slate-400 text-[11px] text-slate-500 font-semibold block mb-1">Execution Engine</span>
                 <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 font-mono text-[11px] text-slate-800">
                   {selectedAgent.model}
                 </div>
@@ -526,7 +526,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
               </div>
 
               <div>
-                <span className="text-slate-400 uppercase tracking-wider text-[10px] font-mono font-semibold block mb-1.5">Registered Capabilities</span>
+                <span className="text-slate-400 text-[11px] text-slate-500 font-semibold block mb-1.5">Registered Capabilities</span>
                 <div className="flex flex-wrap gap-1.5">
                   {selectedAgent.capabilities.map((cap, i) => (
                     <span key={i} className="px-2 py-1 rounded-md bg-slate-100 text-slate-700 font-mono text-[10px] border border-slate-200/60">
@@ -558,7 +558,7 @@ export const AIAgents: React.FC<AIAgentsProps> = ({ onNavigate }) => {
               <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-300">
+                  <span className="text-xs font-mono font-semibold text-slate-300 font-medium">
                     Live Telemetry Log
                   </span>
                 </div>

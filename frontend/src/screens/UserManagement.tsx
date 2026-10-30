@@ -59,13 +59,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onNavigate }) =>
   }, [refreshUsers]);
 
   return (
-    <div className="flex flex-col w-full gap-space-xl">
+    <div className="flex flex-col w-full max-w-[1560px] mx-auto space-y-6 pb-28">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]"></span>
             <span className="font-label-sm uppercase tracking-widest text-[#64748B] font-semibold">
-              SECURITY AUDIT · RBAC ACCESS CONTROLS
+              Security Audit · RBAC Access Controls
             </span>
           </div>
           <h1 className="font-headline-xl text-[#0F172A] font-semibold tracking-tight">
@@ -106,7 +106,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onNavigate }) =>
         <div className="overflow-x-auto scroll-touch">
           <table className="w-full text-left font-body-sm text-body-sm min-w-[580px]">
             <thead>
-              <tr className="bg-[#F8FAFC] text-[#475569] font-label-md uppercase tracking-wider border-b border-[#E2E8F0]">
+              <tr className="bg-[#F8FAFC] text-[#475569] text-xs font-semibold border-b border-[#E2E8F0]">
                 <th className="py-3 px-6 font-semibold">User / Identity</th>
                 <th className="py-3 px-6 font-semibold">Role Descriptor</th>
                 <th className="py-3 px-6 font-semibold">Security Tier</th>
