@@ -16,11 +16,49 @@ from api.platform.semantic import now
 from api.platform.store import metadata_store
 
 
+def _resolve_credential_key():
+    key = os.getenv("PLATFORM_CREDENTIAL_KEY")
+    if key:
+        return key
+    from pathlib import Path
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent
+    env_file = base_dir / ".env"
+    if env_file.exists():
+        try:
+            from dotenv import dotenv_values
+            vals = dotenv_values(env_file)
+            if vals.get("PLATFORM_CREDENTIAL_KEY"):
+                os.environ["PLATFORM_CREDENTIAL_KEY"] = vals["PLATFORM_CREDENTIAL_KEY"]
+                return vals["PLATFORM_CREDENTIAL_KEY"]
+        except Exception:
+            pass
+    key_file = base_dir / "data" / "storage" / ".credential_key"
+    if key_file.exists():
+        try:
+            key = key_file.read_text(encoding="utf-8").strip()
+            if key:
+                os.environ["PLATFORM_CREDENTIAL_KEY"] = key
+                return key
+        except Exception:
+            pass
+    key = Fernet.generate_key().decode()
+    try:
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.write_text(key, encoding="utf-8")
+        os.environ["PLATFORM_CREDENTIAL_KEY"] = key
+    except Exception:
+        pass
+    return key
+
+
 class CredentialStore:
     def __init__(self, store=None, key=None):
-        self.store, self.key = store or metadata_store(), key or os.getenv("PLATFORM_CREDENTIAL_KEY")
+        self.store = store or metadata_store()
+        self.key = key or _resolve_credential_key()
 
     def cipher(self):
+        if not self.key:
+            self.key = _resolve_credential_key()
         if not self.key:
             raise HTTPException(503, "Configure PLATFORM_CREDENTIAL_KEY in server-side secret storage before saving credentials.")
         try:

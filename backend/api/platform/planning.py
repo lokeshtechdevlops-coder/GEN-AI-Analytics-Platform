@@ -6,11 +6,30 @@ from fastapi import HTTPException
 from api.models.execution_context import current_selection
 from api.models.query_plan import QueryPlan
 from api.platform.semantic import semantic_registry
+import copy
+import threading
+
+_INTENT_CACHE = {}
+_INTENT_CACHE_LOCK = threading.Lock()
+
+
+def clear_intent_cache():
+    with _INTENT_CACHE_LOCK:
+        _INTENT_CACHE.clear()
 
 
 def classify_request(prompt):
     selection = current_selection.get()
     model = semantic_registry.get(selection.entry, selection.context.version, selection.context.semantic_revision, approved=True)
+    cache_key = (
+        selection.context.dataset_id,
+        selection.context.version,
+        selection.context.semantic_revision,
+        re.sub(r"\s+", " ", prompt.strip().casefold()),
+    )
+    with _INTENT_CACHE_LOCK:
+        if cache_key in _INTENT_CACHE:
+            return copy.deepcopy(_INTENT_CACHE[cache_key])
     text = prompt.casefold()
     numerical = bool(re.search(r"\b(total|sum|average|avg|count|how many|how much|top|bottom|highest|lowest|compare|chart|graph|plot|min|max|minimum|maximum)\b", text))
     if not re.search(r"\b(meaning|definition|describe|explain)\b", text):
@@ -36,7 +55,12 @@ def classify_request(prompt):
             raise HTTPException(422, "The proposed plan is invalid. Specify the metric, aggregation and filters.") from None
         if plan.intent == "chat" or not plan.measures:
             raise HTTPException(422, "A numerical request requires an explicit analytical plan.")
-        return plan.model_dump(exclude_none=True, by_alias=True)
+        out = plan.model_dump(exclude_none=True, by_alias=True)
+        with _INTENT_CACHE_LOCK:
+            if len(_INTENT_CACHE) > 200:
+                _INTENT_CACHE.pop(next(iter(_INTENT_CACHE)), None)
+            _INTENT_CACHE[cache_key] = out
+        return out
     # Conservative offline support: exact approved names/aliases and explicit aggregation.
     matched = []
     for field in model.fields:
@@ -64,5 +88,10 @@ def classify_request(prompt):
         raise HTTPException(422, "Specify an aggregation or approve a default for this metric.")
     if re.search(r"\b(where|between|during|since|until|for|in|compare|versus|vs)\b", text):
         raise HTTPException(422, "This request needs an explicit filtered query plan. Configure AI planning or use the structured editor.")
-    return QueryPlan(intent="graph" if re.search(r"\b(chart|plot|graph)\b", text) else "analytical",
+    out = QueryPlan(intent="graph" if re.search(r"\b(chart|plot|graph)\b", text) else "analytical",
                      metric=metric, aggregation=aggregation, dimensions=[f.name for f in dimensions]).model_dump(exclude_none=True)
+    with _INTENT_CACHE_LOCK:
+        if len(_INTENT_CACHE) > 200:
+            _INTENT_CACHE.pop(next(iter(_INTENT_CACHE)), None)
+        _INTENT_CACHE[cache_key] = out
+    return out

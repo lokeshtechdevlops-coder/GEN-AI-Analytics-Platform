@@ -73,7 +73,7 @@ class DatasetContextMiddleware:
                 except ValueError:
                     raise HTTPException(422, "Dataset version and semantic revision must be positive integers.") from None
                 snapshot = await run_in_threadpool(dataset_service._snapshot, entry, version)
-                selection_token = current_selection.set(DatasetSelection(context, pinned_entry, copy.deepcopy(snapshot)))
+                selection_token = current_selection.set(DatasetSelection(context, pinned_entry, snapshot))
                 await run_in_threadpool(semantic_registry.get, pinned_entry, version, revision, True if approved_models else False)
             await self.app(scope, receive, send)
         except HTTPException as exc:

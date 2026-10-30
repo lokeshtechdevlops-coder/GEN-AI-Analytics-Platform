@@ -72,6 +72,21 @@ export const saveDefinition = async (item: AnalyticsDefinition) => (await api.po
 export const reviewDefinition = async (item: AnalyticsDefinition, decision: 'approved' | 'rejected') =>
   (await api.post<AnalyticsDefinition>(`/insights/definitions/${item.id}/${item.revision}/review`, { decision })).data;
 
+export interface DashboardPublicationItem {
+  id: string;
+  revision: number;
+}
+
+export interface DashboardPublicationResponse {
+  title: string;
+  items: DashboardPublicationItem[];
+  status: string;
+}
+
+export const getDashboardPublication = async (): Promise<DashboardPublicationResponse> => {
+  return (await api.get<DashboardPublicationResponse>('/insights/dashboard')).data;
+};
+
 export interface PythonGraphAgentResponse {
   status: string;
   prompt: string;

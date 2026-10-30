@@ -55,40 +55,84 @@ class HANATableService:
             )
             rows = cursor.fetchall()
 
+            # Batch query row counts in a single query from SYS.M_TABLES
+            table_counts = {}
+            try:
+                cursor.execute(
+                    """
+                    SELECT TABLE_NAME, RECORD_COUNT 
+                    FROM SYS.M_TABLES 
+                    WHERE SCHEMA_NAME = CURRENT_SCHEMA
+                    """
+                )
+                for rc_table, rc_count in cursor.fetchall():
+                    table_counts[rc_table] = int(rc_count) if rc_count is not None else 0
+            except Exception as e:
+                logger.debug(f"SYS.M_TABLES bulk count query unavailable ({e}), will use fallback if needed.")
+
+            # Batch query all column definitions in one single query
+            cols_by_table = {}
+            try:
+                cursor.execute(
+                    """
+                    SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE_NAME, LENGTH, SCALE 
+                    FROM SYS.TABLE_COLUMNS 
+                    WHERE SCHEMA_NAME = CURRENT_SCHEMA
+                    ORDER BY TABLE_NAME ASC, POSITION ASC
+                    """
+                )
+                for col_table, col_name, data_type, length, scale in cursor.fetchall():
+                    cols_by_table.setdefault(col_table, []).append(
+                        {
+                            "name": col_name,
+                            "type": data_type,
+                            "length": length,
+                            "scale": scale,
+                        }
+                    )
+            except Exception as e:
+                logger.debug(f"SYS.TABLE_COLUMNS bulk query unavailable ({e}), will use fallback if needed.")
+
             for schema_name, table_name, table_type in rows:
                 if table_name.upper() in INTERNAL_TABLES:
                     continue
 
-                # Query row count safely
-                row_count = 0
-                try:
-                    cursor.execute(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}"')
-                    rc_row = cursor.fetchone()
-                    if rc_row:
-                        row_count = int(rc_row[0])
-                except Exception as e:
-                    logger.debug(f"Could not count rows for {schema_name}.{table_name}: {e}")
+                # Query row count safely with fallback
+                row_count = table_counts.get(table_name)
+                if row_count is None:
+                    try:
+                        cursor.execute(f'SELECT COUNT(*) FROM "{schema_name}"."{table_name}"')
+                        rc_row = cursor.fetchone()
+                        row_count = int(rc_row[0]) if rc_row else 0
+                    except Exception as e:
+                        logger.debug(f"Could not count rows for {schema_name}.{table_name}: {e}")
+                        row_count = 0
 
-                # Query column definitions
-                cursor.execute(
-                    """
-                    SELECT COLUMN_NAME, DATA_TYPE_NAME, LENGTH, SCALE 
-                    FROM SYS.TABLE_COLUMNS 
-                    WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?
-                    ORDER BY POSITION ASC
-                    """,
-                    (schema_name, table_name),
-                )
-                cols = cursor.fetchall()
-                columns = [
-                    {
-                        "name": col[0],
-                        "type": col[1],
-                        "length": col[2],
-                        "scale": col[3],
-                    }
-                    for col in cols
-                ]
+                columns = cols_by_table.get(table_name)
+                if columns is None:
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT COLUMN_NAME, DATA_TYPE_NAME, LENGTH, SCALE 
+                            FROM SYS.TABLE_COLUMNS 
+                            WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?
+                            ORDER BY POSITION ASC
+                            """,
+                            (schema_name, table_name),
+                        )
+                        cols = cursor.fetchall()
+                        columns = [
+                            {
+                                "name": col[0],
+                                "type": col[1],
+                                "length": col[2],
+                                "scale": col[3],
+                            }
+                            for col in cols
+                        ]
+                    except Exception as e:
+                        logger.debug(f"Could not fetch columns for {schema_name}.{table_name}: {e}")
+                        columns = []
 
                 tables.append(
                     {

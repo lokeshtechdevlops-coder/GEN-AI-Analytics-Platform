@@ -159,7 +159,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => { });
     clearLocalIdentity(true);
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -316,7 +316,7 @@ export default function App() {
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="font-semibold bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 bg-clip-text text-transparent">
-              RAG Copilot
+              NEO Copilot
             </span>
             <span className="text-slate-400 font-mono text-[10px]">Ask HANA</span>
           </button>
@@ -351,15 +351,13 @@ export default function App() {
 
       {/* Floating Chat Modal / Drawer */}
       <div
-        className={`fixed z-50 transition-all duration-300 ease-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col ${
-          isChatOpen
+        className={`fixed z-50 transition-all duration-300 ease-out bg-white rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden flex flex-col ${isChatOpen
             ? 'opacity-100 scale-100 pointer-events-auto translate-y-0'
             : 'opacity-0 scale-95 pointer-events-none translate-y-6'
-        } ${
-          isChatMaximized
+          } ${isChatMaximized
             ? 'inset-2 sm:inset-6'
             : 'bottom-20 lg:bottom-6 right-2 sm:right-6 w-[calc(100vw-16px)] sm:w-[500px] xl:w-[560px] h-[calc(100vh-100px)] sm:h-[720px] max-h-[calc(100vh-100px)] lg:max-h-[calc(100vh-48px)]'
-        }`}
+          }`}
       >
         {hasOpenedChat && (
           <Suspense fallback={<ScreenFallback />}>
@@ -370,6 +368,7 @@ export default function App() {
               onClose={() => setIsChatOpen(false)}
               onToggleMaximize={() => setIsChatMaximized(prev => !prev)}
               isMaximized={isChatMaximized}
+              user={currentUser}
             />
           </Suspense>
         )}

@@ -8,6 +8,7 @@ import { GraphStudio } from '../screens/GraphStudio';
 import { AnalyticsWidget } from '../components/AnalyticsWidget';
 import { generateCustomGraph } from '../services/graphService';
 import { contextHeaders, selectContext, selectedContext } from '../services/executionContext';
+import { getTimeGreeting, resolveUserName, getUserInitials } from '../screens/RAGChat';
 
 vi.mock('../services/api', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -153,5 +154,25 @@ describe('Platform correctness and navigation', () => {
     expect(await screen.findByText('Employee records')).toBeTruthy();
     expect(screen.queryByText('Total Net Revenue')).toBeNull();
     expect(screen.getByText('2')).toBeTruthy();
+  });
+
+  it('correctly resolves time greeting and usernames without exposing emails', () => {
+    // Test greetings across time
+    expect(getTimeGreeting(new Date('2026-10-30T08:30:00'))).toBe('Good morning');
+    expect(getTimeGreeting(new Date('2026-10-30T14:30:00'))).toBe('Good afternoon');
+    expect(getTimeGreeting(new Date('2026-10-30T19:30:00'))).toBe('Good evening');
+    expect(getTimeGreeting(new Date('2026-10-30T23:30:00'))).toBe('Good evening');
+
+    // Test username resolution (never showing email)
+    expect(resolveUserName({ name: 'Lokesh Kumar T', email: 'lokesh@neovatic.com' })).toBe('Lokesh Kumar T');
+    expect(resolveUserName({ name: 'lokesh.kumar@neovatic.com', email: 'lokesh.kumar@neovatic.com' })).toBe('Lokesh Kumar');
+    expect(resolveUserName({ name: 'admin@sap.corp', email: 'admin@sap.corp' })).toBe('Admin');
+    expect(resolveUserName({ user_id: 'alice' })).toBe('Alice');
+    expect(resolveUserName(null)).toBe('User');
+
+    // Test initials
+    expect(getUserInitials('Lokesh Kumar T')).toBe('LT');
+    expect(getUserInitials('Lokesh Kumar')).toBe('LK');
+    expect(getUserInitials('Admin')).toBe('AD');
   });
 });

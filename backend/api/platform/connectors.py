@@ -119,12 +119,15 @@ class HTTPAdapter(Adapter):
         elif self.auth_type != "none":
             raise ValueError("Unsupported HTTP authentication type")
 
-    def get(self, target, params=None, raw=False):
+    def get(self, target, params=None, raw=False, headers=None):
         self.check_cancelled()
         url = endpoint(urljoin(self.base, target))
         if (urlsplit(url).scheme, urlsplit(url).netloc) != (urlsplit(self.base).scheme, urlsplit(self.base).netloc):
             raise ValueError("Cross-origin extraction links are not permitted")
-        response = self.session.get(url, params=params, timeout=30, allow_redirects=False)
+        req_headers = dict(headers or {})
+        if not raw and "Accept" not in req_headers:
+            req_headers["Accept"] = "application/json"
+        response = self.session.get(url, params=params, headers=req_headers if req_headers else None, timeout=30, allow_redirects=False)
         if 300 <= response.status_code < 400:
             raise ValueError("Configure the final source endpoint; redirects are not followed")
         response.raise_for_status()

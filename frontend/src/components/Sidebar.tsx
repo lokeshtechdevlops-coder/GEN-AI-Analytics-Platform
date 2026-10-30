@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { hasAdminRole, getRoleLabel } from '../services/authService';
+import { NeovaticLogo } from './NeovaticLogo';
 
 interface SidebarProps {
   activePath: string;
@@ -18,7 +19,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   user,
   onLogout,
 }) => {
-  // 1) Administration Dropdown Items
+  // 1) AI Dashboards Dropdown Items
+  const dashboardItems = [
+    {
+      id: 'executive-dashboard',
+      label: 'Executive Dashboard',
+      badge: null,
+      icon: 'dashboard',
+    },
+    {
+      id: 'build-your-kpi-graph-studio',
+      label: 'Build Your KPI',
+      badge: null,
+      icon: 'query_stats',
+    },
+    {
+      id: 'data-explorer',
+      label: 'Data Explorer',
+      badge: null,
+      icon: 'terminal',
+    },
+  ];
+
+  // 2) Administration Dropdown Items
   const adminItems = [
     {
       id: 'ai-agents',
@@ -43,28 +66,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'System Management',
       badge: null,
       icon: 'settings',
-    },
-  ];
-
-  // 2) AI Dashboards Dropdown Items
-  const dashboardItems = [
-    {
-      id: 'executive-dashboard',
-      label: 'Executive Dashboard',
-      badge: null,
-      icon: 'dashboard',
-    },
-    {
-      id: 'build-your-kpi-graph-studio',
-      label: 'Build Your KPI',
-      badge: null,
-      icon: 'query_stats',
-    },
-    {
-      id: 'data-explorer',
-      label: 'Data Explorer',
-      badge: null,
-      icon: 'terminal',
     },
   ];
 
@@ -176,13 +177,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4">
           {/* Mobile Drawer Header with Close Button */}
           <div className="flex lg:hidden items-center justify-between pb-3 mb-2 border-b border-[#E2E8F0]">
-            <div className="flex flex-col">
-              <span className="font-headline-sm text-[16px] font-semibold text-[#0F172A]">
-                NEOVATIC
-              </span>
-              <span className="text-[10px] text-[#64748B] uppercase font-mono">
-                SAP HANA & AI CORE
-              </span>
+            <div className="flex items-center gap-2.5">
+              <NeovaticLogo size={34} showText={false} />
+              <div className="flex flex-col">
+                <span className="font-headline-sm text-[16px] font-semibold text-[#0F172A]">
+                  NEOVATIC
+                </span>
+                <span className="text-[10px] text-[#64748B] uppercase font-mono">
+                  SAP HANA & AI CORE
+                </span>
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -200,7 +204,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <nav className="flex flex-col gap-1">
-            {/* 1) Administration Dropdown (Visible only for Admin or Admin+User, hidden for Only User) */}
+            {/* 1) AI Dashboards Dropdown */}
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => setDashboardsOpen(prev => !prev)}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all text-left cursor-pointer select-none group ${
+                  isDashboardActive
+                    ? 'bg-slate-100/90 text-[#0F172A] font-semibold'
+                    : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
+                }`}
+                aria-expanded={dashboardsOpen}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`material-symbols-outlined text-[18px] transition-colors ${
+                    isDashboardActive ? 'text-blue-600' : 'text-[#64748B] group-hover:text-[#0F172A]'
+                  }`}>
+                    dashboard_customize
+                  </span>
+                  <span className="font-semibold text-xs tracking-tight truncate">AI Dashboards</span>
+                  {isDashboardActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className={`material-symbols-outlined text-[18px] text-[#64748B] transition-transform duration-200 ${
+                    dashboardsOpen ? 'rotate-180' : ''
+                  }`}>
+                    keyboard_arrow_down
+                  </span>
+                </div>
+              </button>
+
+              {dashboardsOpen && (
+                <div className="pl-2 ml-3.5 border-l border-slate-200 flex flex-col gap-0.5 my-1 animate-in fade-in duration-150">
+                  {dashboardItems.map(renderNavItem)}
+                </div>
+              )}
+            </div>
+
+            {/* 2) Administration Dropdown (Visible only for Admin or Admin+User, hidden for Only User) */}
             {isAdmin && (
               <div className="flex flex-col">
                 <button
@@ -240,45 +283,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </div>
             )}
-
-            {/* 2) AI Dashboards Dropdown */}
-            <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => setDashboardsOpen(prev => !prev)}
-                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all text-left cursor-pointer select-none group ${
-                  isDashboardActive
-                    ? 'bg-slate-100/90 text-[#0F172A] font-semibold'
-                    : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-                }`}
-                aria-expanded={dashboardsOpen}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`material-symbols-outlined text-[18px] transition-colors ${
-                    isDashboardActive ? 'text-blue-600' : 'text-[#64748B] group-hover:text-[#0F172A]'
-                  }`}>
-                    dashboard_customize
-                  </span>
-                  <span className="font-semibold text-xs tracking-tight truncate">AI Dashboards</span>
-                  {isDashboardActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0" />
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className={`material-symbols-outlined text-[18px] text-[#64748B] transition-transform duration-200 ${
-                    dashboardsOpen ? 'rotate-180' : ''
-                  }`}>
-                    keyboard_arrow_down
-                  </span>
-                </div>
-              </button>
-
-              {dashboardsOpen && (
-                <div className="pl-2 ml-3.5 border-l border-slate-200 flex flex-col gap-0.5 my-1 animate-in fade-in duration-150">
-                  {dashboardItems.map(renderNavItem)}
-                </div>
-              )}
-            </div>
 
             {/* Other Pages Left As They Are */}
             <div className="pt-2 mt-1 border-t border-[#E2E8F0] flex flex-col gap-1">

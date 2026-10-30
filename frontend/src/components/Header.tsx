@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex items-center cursor-pointer min-w-0"
           onClick={() => onNavigate('executive-dashboard')}
         >
-          <NeovaticLogo size={28} />
+          <NeovaticLogo size={38} />
         </div>
       </div>
 

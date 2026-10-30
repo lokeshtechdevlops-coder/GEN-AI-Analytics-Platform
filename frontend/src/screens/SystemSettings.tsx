@@ -56,6 +56,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
   const [mapping, setMapping] = useState('{}');
   const [operationParameters, setOperationParameters] = useState('{}');
   const [discovery, setDiscovery] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
   const [connectionId, setConnectionId] = useState('');
   const [source, setSource] = useState('');
   const [bindingName, setBindingName] = useState('');
@@ -606,17 +607,19 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
 
             <div className="flex items-center gap-3 pt-2">
               <button
+                type="button"
                 disabled={busy || !connectionId || !source}
                 className={buttonSecondaryClass}
                 onClick={() =>
                   void run(async () => {
-                    setDiscovery((await api.post(`/system/connections/${connectionId}/preview`, { source })).data);
+                    setPreviewData((await api.post(`/system/connections/${connectionId}/preview`, { source })).data);
                   })
                 }
               >
                 Preview Source Data
               </button>
               <button
+                type="button"
                 disabled={busy || !connectionId || !source || !bindingName}
                 className={buttonPrimaryClass}
                 onClick={() =>
@@ -633,6 +636,7 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
                       transformation_plan: JSON.parse(transformationPlan),
                     });
                     setBindings(await listBindings());
+                    setPreviewData(null);
                     setMessage('Source binding saved successfully. You can now trigger a sync.');
                   })
                 }
@@ -640,6 +644,35 @@ export const SystemSettings: React.FC<{ onNavigate: (path: string) => void; init
                 Save Source Binding
               </button>
             </div>
+
+            {/* Live Data Preview inside Bind Source Section */}
+            {previewData && (
+              <div className="mt-4 p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-blue-600 text-base">visibility</span>
+                    <h3 className="font-bold text-slate-900 text-sm">
+                      Live Data Preview: {source}
+                    </h3>
+                    {Array.isArray(previewData?.records) && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">
+                        {previewData.records.length} sample records
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs text-slate-500 hover:text-slate-800 font-medium cursor-pointer"
+                    onClick={() => setPreviewData(null)}
+                  >
+                    Close Preview
+                  </button>
+                </div>
+                <pre className="text-xs font-mono bg-white p-4 rounded-xl border border-slate-200/80 overflow-auto max-h-80 text-slate-800 leading-relaxed shadow-xs">
+                  {JSON.stringify(previewData, null, 2)}
+                </pre>
+              </div>
+            )}
           </section>
 
           {/* Source Bindings List (Fixed ? characters) */}

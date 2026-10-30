@@ -1,6 +1,7 @@
 import React, { useState, FormEvent } from 'react';
 import { clearLocalIdentity, sapSignInTarget } from '../services/authNavigation';
 import { setAuthToken } from '../services/api';
+import logoImg from '../assets/logo-transparent.png';
 import {
   ShieldCheck,
   Eye,
@@ -136,15 +137,15 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
         <div className="absolute bottom-[-100px] right-[-100px] w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Brand Header */}
-        <div className="relative z-10 flex items-center gap-3.5 mb-10">
-          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/80 flex items-center justify-center text-white shadow-md">
-            <span className="font-bold text-sm tracking-tight">N°</span>
+        <div className="relative z-10 flex items-center gap-4 mb-10">
+          <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center p-2 shadow-md shrink-0">
+            <img src={logoImg} alt="Neovatic Logo" className="w-full h-full object-contain" />
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-wider uppercase text-slate-100">
+            <h1 className="text-base font-bold tracking-wider uppercase text-slate-100">
               NEOVATIC GEN-AI ANALYTICS PLATFORM
             </h1>
-            <p className="text-[11px] font-medium text-slate-400 tracking-wide uppercase">
+            <p className="text-xs font-medium text-slate-400 tracking-wide uppercase">
               SAP HANA CLOUD &amp; AI CORE
             </p>
           </div>
@@ -227,6 +228,15 @@ export const EnterpriseSignIn: React.FC<EnterpriseSignInProps> = ({
         <div className="w-full max-w-[420px] space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xl shadow-slate-200/50 p-7 sm:p-9 space-y-6">
             <div>
+              <div className="flex items-center gap-3.5 mb-5">
+                <div className="w-13 h-13 rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center justify-center p-1.5 shadow-xs shrink-0">
+                  <img src={logoImg} alt="Neovatic Logo" className="w-full h-full object-contain" />
+                </div>
+                <div>
+                  <span className="font-bold text-sm text-slate-900 tracking-tight block">NEOVATIC GEN-AI</span>
+                  <span className="text-[11px] text-slate-500 font-mono uppercase block">SAP HANA & AI CORE</span>
+                </div>
+              </div>
               <h2 className="text-2xl font-bold tracking-tight text-slate-900">Enterprise Sign In</h2>
               <p className="text-xs sm:text-sm text-slate-500 mt-1.5">
                 Authenticate with your corporate credentials to access tenant analytics.

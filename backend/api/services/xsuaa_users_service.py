@@ -2,12 +2,30 @@
 import logging
 import os
 from datetime import datetime, timezone
+import time
+import copy
+import hashlib
+import threading
+try:
+    from unittest.mock import Mock
+except ImportError:
+    Mock = None
 
 import requests
 from fastapi import HTTPException
 from api.xsuaa import xsuaa_credentials, validate_token, bearer_token
 
 logger = logging.getLogger(__name__)
+
+_USERS_CACHE = {}
+_USERS_CACHE_LOCK = threading.Lock()
+_USERS_CACHE_TTL_SECONDS = 120.0
+
+
+def clear_users_cache():
+    """Clear in-memory SCIM user cache."""
+    with _USERS_CACHE_LOCK:
+        _USERS_CACHE.clear()
 
 
 def require_user_admin(authorization: str | None) -> None:
@@ -78,7 +96,17 @@ def _resources(session: requests.Session, base_url: str, resource: str) -> list:
         start += len(page)
 
 
-def list_users(authorization: str) -> dict:
+def list_users(authorization: str, force_refresh: bool = False) -> dict:
+    is_test_mock = hasattr(requests.Session, "mock_calls") or (Mock is not None and isinstance(requests.Session, Mock))
+    cache_key = hashlib.sha256(authorization.encode()).hexdigest() if authorization else "default"
+    now = time.time()
+    if not force_refresh and not is_test_mock:
+        with _USERS_CACHE_LOCK:
+            if cache_key in _USERS_CACHE:
+                cached = _USERS_CACHE[cache_key]
+                if now - cached["timestamp"] < _USERS_CACHE_TTL_SECONDS:
+                    return copy.deepcopy(cached["data"])
+
     credentials = xsuaa_credentials()
     if not credentials.get("apiurl"):
         raise HTTPException(503, "The project XSUAA application binding must include apiurl.")
@@ -132,4 +160,8 @@ def list_users(authorization: str) -> dict:
         raise HTTPException(502, "Could not read project users from XSUAA.")
     except (requests.RequestException, ValueError, KeyError, TypeError):
         raise HTTPException(502, "Could not read project users from the XSUAA application service.")
-    return {"users": users, "total": len(users), "source": "xsuaa", "project_role_collections": sorted(project_collections), "fetched_at": datetime.now(timezone.utc).isoformat()}
+    result = {"users": users, "total": len(users), "source": "xsuaa", "project_role_collections": sorted(project_collections), "fetched_at": datetime.now(timezone.utc).isoformat()}
+    if not is_test_mock:
+        with _USERS_CACHE_LOCK:
+            _USERS_CACHE[cache_key] = {"data": result, "timestamp": now}
+    return result

@@ -173,7 +173,8 @@ class DatasetService:
 
         data = json.loads(path.read_text(encoding="utf-8"))
         with self._cache_lock:
-            self._snapshot_cache.clear()
+            while len(self._snapshot_cache) >= 20:
+                self._snapshot_cache.pop(next(iter(self._snapshot_cache)), None)
             self._snapshot_cache[cache_key] = data
         return data
 
@@ -514,6 +515,13 @@ class DatasetService:
         from api.services.vector_service import vector_service
         vector_service.clear_cache()
         dataset_service._snapshot_cache.clear()
+        try:
+            from api.routes.dashboard import clear_dashboard_cache
+            clear_dashboard_cache()
+            from api.platform.planning import clear_intent_cache
+            clear_intent_cache()
+        except Exception:
+            pass
 
     def _import_legacy(self):
         catalog = self._catalog()

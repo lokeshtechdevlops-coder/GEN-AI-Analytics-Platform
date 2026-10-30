@@ -42,6 +42,20 @@ class DashboardPublication(BaseModel):
     items: list[dict] = Field(max_length=50)
 
 
+@router.get("/api/insights/dashboard")
+def get_dashboard_publication():
+    value = selected()
+    namespace = semantic_registry.namespace(value.entry, value.context.version, f"dashboard:{value.context.semantic_revision}")
+    publication = semantic_registry.store.get(namespace, "published")
+    if publication is None:
+        return {"title": "Executive Analytics Dashboard", "items": [], "status": "unpublished"}
+    return {
+        "title": publication["value"].get("title", "Executive Analytics Dashboard"),
+        "items": publication["value"].get("items", []),
+        "status": "published",
+    }
+
+
 @router.post("/api/insights/dashboard")
 def publish_dashboard(publication: DashboardPublication):
     identity = current_identity.get()
@@ -56,6 +70,11 @@ def publish_dashboard(publication: DashboardPublication):
             raise HTTPException(409, "Only approved definition revisions may be published.")
     namespace = semantic_registry.namespace(value.entry, value.context.version, f"dashboard:{value.context.semantic_revision}")
     previous = semantic_registry.store.get(namespace, "published")
+    try:
+        from api.routes.dashboard import clear_dashboard_cache
+        clear_dashboard_cache()
+    except Exception:
+        pass
     return semantic_registry.store.put(namespace, "published", publication.model_dump(), previous["revision"] if previous else 0)
 
 
@@ -119,7 +138,8 @@ def selected():
 @router.post("/api/insights/execute")
 def execute(plan: QueryPlan):
     value = selected()
-    result = analytics_engine.execute(plan.model_dump(exclude_none=True, by_alias=True))
+    from api.services.data_service import data_service
+    result = analytics_engine.execute(plan.model_dump(exclude_none=True, by_alias=True), dataframe=data_service.get_dataframe())
     return {**result.to_dict(), "context": value.context.model_dump(), "query_plan": plan.model_dump(exclude_none=True, by_alias=True)}
 
 
@@ -144,7 +164,8 @@ def workflow_status(dataset_id: str, version: int):
 @router.post("/api/insights/definitions")
 def revise_item(item: AnalyticsItem):
     value = selected()
-    result = analytics_engine.execute(item.query_plan.model_dump(exclude_none=True, by_alias=True))
+    from api.services.data_service import data_service
+    result = analytics_engine.execute(item.query_plan.model_dump(exclude_none=True, by_alias=True), dataframe=data_service.get_dataframe())
     if not result.success:
         raise HTTPException(422, result.error)
     return semantic_registry.save_item(value.entry, value.context.version, value.context.semantic_revision, item.model_dump(mode="json"))
@@ -161,7 +182,8 @@ def review_item(item_id: str, revision: int, body: Review):
     if item is None:
         raise HTTPException(404, "Definition not found.")
     if body.decision == "approved":
-        result = analytics_engine.execute(item.query_plan.model_dump(exclude_none=True, by_alias=True))
+        from api.services.data_service import data_service
+        result = analytics_engine.execute(item.query_plan.model_dump(exclude_none=True, by_alias=True), dataframe=data_service.get_dataframe())
         if not result.success:
             raise HTTPException(422, result.error)
     reviewed = semantic_registry.review_item(value.entry, value.context.version, value.context.semantic_revision,

@@ -135,29 +135,35 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={index}
-              className={`border-b border-slate-100 transition-colors hover:bg-blue-50/40 ${
-                index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-              }`}
-            >
-              {columns.map(c => {
-                const formatted = formatTableCell(row[c], c);
-                return (
-                  <td
-                    key={c}
-                    className="px-4 py-2.5 whitespace-nowrap text-slate-700 tabular-nums text-xs"
-                    title={formatted.tooltip}
-                  >
-                    {formatted.display}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+            {
+              rows.slice(0, 100).map((row, index) => (
+                <tr
+                  key={index}
+                  className={`border-b border-slate-100 transition-colors hover:bg-blue-50/40 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                    }`}
+                >
+                  {columns.map(c => {
+                    const formatted = formatTableCell(row[c], c);
+                    return (
+                      <td
+                        key={c}
+                        className="px-4 py-2.5 whitespace-nowrap text-slate-700 tabular-nums text-xs"
+                        title={formatted.tooltip}
+                      >
+                        {formatted.display}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            }
         </tbody>
       </table>
+      {rows.length > 100 && (
+        <div className="px-4 py-2 text-center text-xs text-slate-500 bg-slate-50/60 border-t border-slate-200">
+          Showing first 100 of {rows.length.toLocaleString()} rows
+        </div>
+      )}
     </div>
   );
 
@@ -221,7 +227,7 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
             {String(result.summary?.formatted_value || formatTableCell(rows[0][valueKey] ?? 'N/A', valueKey).display)}
           </p>
         </div>
-) : definition.kind === 'pie' ? (
+      ) : definition.kind === 'pie' ? (
         !pieValid ? (
           <p role="alert" className="text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
             Pie charts require nonnegative, nonmissing values and a positive total.
@@ -330,9 +336,8 @@ export function AnalyticsWidget({ definition, result, showTable = true, isDashbo
                       key={index}
                       onMouseEnter={() => setHoveredIndex(index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      className={`pt-1.5 first:pt-0 flex items-center justify-between gap-3 text-xs py-1 px-2 rounded-lg transition-colors cursor-pointer ${
-                        isHovered ? 'bg-blue-100/70 font-semibold' : 'hover:bg-white'
-                      }`}
+                      className={`pt-1.5 first:pt-0 flex items-center justify-between gap-3 text-xs py-1 px-2 rounded-lg transition-colors cursor-pointer ${isHovered ? 'bg-blue-100/70 font-semibold' : 'hover:bg-white'
+                        }`}
                     >
                       <div className="flex items-center gap-2 min-w-0 truncate">
                         <span

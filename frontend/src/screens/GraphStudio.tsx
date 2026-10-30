@@ -14,6 +14,7 @@ import {
   saveDefinition,
   generatePythonGraphAgent,
   PythonGraphAgentResponse,
+  getDashboardPublication,
 } from '../services/semanticService';
 import { AnalyticsWidget } from '../components/AnalyticsWidget';
 
@@ -84,6 +85,8 @@ export function GraphStudio({
   const [dimension, setDimension] = useState('');
   const [kind, setKind] = useState('kpi');
   const [selected, setSelected] = useState<string[]>([]);
+  const [publishedKeys, setPublishedKeys] = useState<string[]>([]);
+  const [filterDashboard, setFilterDashboard] = useState<'all' | 'published' | 'not_published'>('all');
   const [edit, setEdit] = useState<AnalyticsDefinition | null>(null);
   const [planText, setPlanText] = useState('');
 
@@ -118,7 +121,15 @@ export function GraphStudio({
       selectContext({ ...context, semanticRevision: approved.revision });
     }
     setModel(approved);
-    setItems(await getRecommendations());
+    const [recommendations, pubRes] = await Promise.all([
+      getRecommendations(),
+      getDashboardPublication().catch(() => ({ title: '', items: [], status: 'unpublished' })),
+    ]);
+    const itemsList = Array.isArray(pubRes) ? pubRes : ((pubRes as any)?.items || []);
+    const pubKeys = itemsList.map((p: any) => `${p.id}:${p.revision}`);
+    setPublishedKeys(pubKeys);
+    setSelected(pubKeys);
+    setItems(recommendations);
   };
 
   const run = async (operation: () => Promise<void>) => {
@@ -251,6 +262,7 @@ export function GraphStudio({
         title: 'Executive Analytics Dashboard',
         items: selectedWidgets.map(i => ({ id: i.id, revision: i.revision })),
       });
+      setPublishedKeys([...selected]);
       setPublishedSuccess(true);
       setMessage(`Successfully published ${selectedWidgets.length} widget(s) to the Executive Dashboard!`);
     });
@@ -886,26 +898,88 @@ export function GraphStudio({
       )}
 
       {/* CONFIGURED DEFINITIONS & WIDGETS STREAM: Visible only in Visual KPI Builder tab */}
-      {activeMode === 'visual' && (
+      {activeMode === 'visual' && (() => {
+        const publishedCount = items.filter(i => publishedKeys.includes(`${i.id}:${i.revision}`)).length;
+        const notPublishedCount = items.filter(i => !publishedKeys.includes(`${i.id}:${i.revision}`)).length;
+        const approvedCount = items.filter(i => i.status === 'approved').length;
+        const displayedItems = items.filter(item => {
+          const key = `${item.id}:${item.revision}`;
+          if (filterDashboard === 'published') return publishedKeys.includes(key);
+          if (filterDashboard === 'not_published') return !publishedKeys.includes(key);
+          return true;
+        });
+
+        return (
         <>
-          {/* CONFIGURED DEFINITIONS STREAM (Matches Reference Image 1) */}
+          {/* CONFIGURED DEFINITIONS STREAM */}
       <section className="space-y-4 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Configured Definitions ({items.length})
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-lg font-bold text-slate-900">
+                Configured Definitions ({items.length})
+              </h2>
+              {publishedCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                  {publishedCount} on Dashboard
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {canPublish
-                ? 'Review and approve definitions. Check approved cards to publish them live to the Executive Dashboard.'
+                ? 'Review and approve definitions. Cards with "Live on Dashboard" are currently active on the Executive Dashboard.'
                 : 'Review definitions and preview charts. Widget publishing to Executive Dashboard is restricted to Admin or Admin+User.'}
             </p>
           </div>
-          {items.length > 0 && (
-            <div className="text-xs font-semibold px-3 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200">
-              {items.filter(i => i.status === 'approved').length} of {items.length} Approved
-            </div>
-          )}
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick Filter Tabs */}
+            {items.length > 0 && (
+              <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setFilterDashboard('all')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    filterDashboard === 'all'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  All ({items.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterDashboard('published')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                    filterDashboard === 'published'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-blue-700'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${filterDashboard === 'published' ? 'bg-white' : 'bg-blue-600'}`}></span>
+                  Live on Dashboard ({publishedCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterDashboard('not_published')}
+                  className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                    filterDashboard === 'not_published'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Not on Dashboard ({notPublishedCount})
+                </button>
+              </div>
+            )}
+
+            {items.length > 0 && (
+              <div className="text-xs font-semibold px-3 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200">
+                {approvedCount} of {items.length} Approved
+              </div>
+            )}
+          </div>
         </div>
 
         {model && !items.length && (
@@ -922,9 +996,23 @@ export function GraphStudio({
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4">
-          {items.map(item => {
+        {displayedItems.length === 0 && items.length > 0 && (
+          <div className="p-8 text-center bg-white border border-dashed border-slate-200 rounded-2xl text-slate-500 text-xs">
+            No widgets match the selected filter (&quot;{filterDashboard === 'published' ? 'Live on Dashboard' : 'Not on Dashboard'}&quot;).
+            <button
+              type="button"
+              onClick={() => setFilterDashboard('all')}
+              className="ml-2 text-blue-600 font-semibold hover:underline cursor-pointer"
+            >
+              Show all
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4.5 items-start">
+          {displayedItems.map(item => {
             const key = `${item.id}:${item.revision}`;
+            const isPublished = publishedKeys.includes(key);
             const isSelected = selected.includes(key);
             const isPreviewOpen = Boolean(previews[key]);
             const isPreviewLoading = loadingPreviewId === key;
@@ -932,56 +1020,83 @@ export function GraphStudio({
             return (
               <article
                 key={key}
-                className={`bg-white border rounded-2xl p-5 shadow-sm transition-all space-y-4 ${
-                  isSelected
+                className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-xs transition-all flex flex-col justify-between h-full space-y-3.5 relative overflow-hidden ${
+                  isPublished
+                    ? 'border-blue-300 ring-2 ring-blue-500/15 bg-blue-50/10'
+                    : isSelected
                     ? 'border-emerald-300 ring-4 ring-emerald-400/10 bg-emerald-50/10'
                     : 'border-slate-200/80 hover:border-slate-300 hover:shadow-md'
                 }`}
               >
-                {/* Header (Screenshot 1) */}
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="font-bold text-base text-slate-900">{item.title}</h3>
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 capitalize">
-                        {item.kind}
+                {/* Header with Title, Kind Badge, Dashboard Status, and Review Status */}
+                <div className="space-y-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate" title={item.title}>
+                          {item.title}
+                        </h3>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 uppercase tracking-wide shrink-0">
+                          {item.kind}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end shrink-0">
+                      {isPublished ? (
+                        <span
+                          title="This KPI is currently active and visible on the Executive Dashboard."
+                          className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs whitespace-nowrap"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                          <span>Live on Dashboard</span>
+                        </span>
+                      ) : (
+                        <span
+                          title="This KPI is not currently included on the Executive Dashboard."
+                          className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 whitespace-nowrap"
+                        >
+                          <span className="material-symbols-outlined text-[13px] text-slate-400">dashboard_customize</span>
+                          <span>Not on Dashboard</span>
+                        </span>
+                      )}
+
+                      <span
+                        className={`text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${
+                          item.status === 'approved'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : item.status === 'rejected'
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {item.status.charAt(0).toUpperCase() + item.status.slice(1)} (Rev {item.revision})
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">{item.explanation}</p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                        item.status === 'approved'
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                          : item.status === 'rejected'
-                          ? 'bg-rose-50 text-rose-800 border-rose-200'
-                          : 'bg-amber-50 text-amber-800 border-amber-200'
-                      }`}
-                    >
-                      {item.status.charAt(0).toUpperCase() + item.status.slice(1)} (Rev {item.revision})
-                    </span>
-                  </div>
+                  <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed" title={item.explanation}>
+                    {item.explanation}
+                  </p>
+
+                  {item.reviewer && (
+                    <p className="text-[10px] text-slate-400 font-mono truncate" title={`Reviewed by ${item.reviewer} · ${new Date(item.reviewed_at || '').toLocaleString()}`}>
+                      Reviewed by {item.reviewer.slice(0, 10)}... · {new Date(item.reviewed_at || '').toLocaleDateString()}
+                    </p>
+                  )}
                 </div>
 
-                {item.reviewer && (
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    Reviewed by {item.reviewer} · {new Date(item.reviewed_at || '').toLocaleString()}
-                  </p>
-                )}
-
                 {/* Query Plan Accordion */}
-                <details className="text-xs text-slate-600 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                  <summary className="cursor-pointer font-medium text-slate-700 select-none flex items-center gap-1.5">
+                <details className="text-xs text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-100">
+                  <summary className="cursor-pointer font-medium text-slate-700 select-none flex items-center gap-1.5 text-xs">
                     <span className="material-symbols-outlined text-sm text-slate-500">code</span>
                     <span>View Dependencies & Query Plan</span>
                   </summary>
-                  <div className="mt-2.5 space-y-2">
-                    <p>
+                  <div className="mt-2 space-y-1.5">
+                    <p className="text-[11px] truncate">
                       <strong>Dependencies:</strong> {(item.dependencies || []).join(', ') || 'Source rows count'}
                     </p>
-                    <pre className="overflow-auto bg-slate-900 text-slate-100 rounded-lg p-3 text-[11px] font-mono leading-relaxed">
+                    <pre className="overflow-auto max-h-36 bg-slate-900 text-slate-100 rounded-lg p-2.5 text-[10px] font-mono leading-relaxed">
                       {JSON.stringify(item.query_plan, null, 2)}
                     </pre>
                   </div>
@@ -989,10 +1104,10 @@ export function GraphStudio({
 
                 {/* Calculation Live Preview (Formatted $34.09M values) */}
                 {isPreviewOpen && (
-                  <div className="border border-blue-200 bg-blue-50/20 rounded-2xl p-4 mt-2 shadow-inner">
-                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-blue-100 text-xs font-semibold text-blue-900">
-                      <span className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-blue-600 text-base">visibility</span>
+                  <div className="border border-blue-200 bg-blue-50/20 rounded-xl p-3 mt-1 shadow-inner overflow-hidden">
+                    <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-blue-100 text-xs font-semibold text-blue-900">
+                      <span className="flex items-center gap-1.5 text-xs">
+                        <span className="material-symbols-outlined text-blue-600 text-sm">visibility</span>
                         <span>Live Calculation Engine Preview</span>
                       </span>
                       <button
@@ -1001,27 +1116,29 @@ export function GraphStudio({
                         className="text-slate-400 hover:text-slate-600 cursor-pointer"
                         title="Hide preview"
                       >
-                        <span className="material-symbols-outlined text-base">close</span>
+                        <span className="material-symbols-outlined text-sm">close</span>
                       </button>
                     </div>
-                    <AnalyticsWidget definition={item} result={previews[key]} showTable={true} />
+                    <div className="overflow-x-auto max-h-[320px]">
+                      <AnalyticsWidget definition={item} result={previews[key]} showTable={true} />
+                    </div>
                   </div>
                 )}
 
-                {/* Action Bar (Screenshot 1) */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
-                  <div className="flex flex-wrap items-center gap-2">
+                {/* Action Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 mt-auto">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button
                       type="button"
                       disabled={busy || isPreviewLoading}
                       onClick={() => void togglePreview(item)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all border cursor-pointer ${
                         isPreviewOpen
                           ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 shadow-2xs'
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[16px]">
+                      <span className="material-symbols-outlined text-[15px]">
                         {isPreviewLoading ? 'sync' : isPreviewOpen ? 'visibility_off' : 'visibility'}
                       </span>
                       <span>
@@ -1040,14 +1157,14 @@ export function GraphStudio({
                         setActiveMode('visual');
                         document.getElementById('definition-form')?.scrollIntoView({ behavior: 'smooth' });
                       }}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 flex items-center gap-1 transition-all shadow-2xs cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      <span className="material-symbols-outlined text-[15px]">edit</span>
                       <span>Edit Query</span>
                     </button>
 
                     {item.status === 'proposed' && (
-                      <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                      <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200">
                         <button
                           type="button"
                           disabled={busy}
@@ -1058,9 +1175,9 @@ export function GraphStudio({
                               setMessage(`Approved definition "${item.title}". It can now be included on the dashboard.`);
                             })
                           }
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
                         >
-                          <span className="material-symbols-outlined text-[16px]">check</span>
+                          <span className="material-symbols-outlined text-[15px]">check</span>
                           <span>Approve</span>
                         </button>
 
@@ -1074,9 +1191,9 @@ export function GraphStudio({
                               setMessage(`Rejected definition "${item.title}".`);
                             })
                           }
-                          className="border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
+                          className="border border-rose-200 text-rose-600 hover:bg-rose-50 font-semibold text-xs px-2.5 py-1.5 rounded-xl flex items-center gap-1 transition-all cursor-pointer"
                         >
-                          <span className="material-symbols-outlined text-[16px]">close</span>
+                          <span className="material-symbols-outlined text-[15px]">close</span>
                           <span>Reject</span>
                         </button>
                       </div>
@@ -1092,9 +1209,9 @@ export function GraphStudio({
                             prev.includes(key) ? prev.filter(v => v !== key) : [...prev, key]
                           );
                         }}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none border ${
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer select-none border shrink-0 ${
                           isSelected
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                             : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-500 hover:text-emerald-700'
                         }`}
                       >
@@ -1106,9 +1223,9 @@ export function GraphStudio({
                     ) : (
                       <div
                         title="Only Admin or Admin+User accounts have permission to publish widgets to the Executive Dashboard."
-                        className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 flex items-center gap-1.5 select-none cursor-not-allowed"
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 flex items-center gap-1.5 shrink-0 select-none cursor-not-allowed"
                       >
-                        <span className="material-symbols-outlined text-[15px] text-slate-400">lock</span>
+                        <span className="material-symbols-outlined text-[14px] text-slate-400">lock</span>
                         <span>Publishing (Admin Only)</span>
                       </div>
                     )
@@ -1131,7 +1248,7 @@ export function GraphStudio({
               <div className="text-sm font-bold text-slate-900">
                 {selected.length === 0
                   ? 'No widgets selected for Executive Dashboard'
-                  : `${selected.length} widget${selected.length > 1 ? 's' : ''} ready to publish`}
+                  : `${selected.length} widget${selected.length > 1 ? 's' : ''} ready to publish (${publishedKeys.length} live on dashboard)`}
               </div>
               <div className="text-xs text-slate-500">
                 {selected.length === 0
@@ -1179,8 +1296,9 @@ export function GraphStudio({
           </span>
         </div>
       )}
-      </>
-    )}
+        </>
+        );
+      })()}
     </div>
   );
 }

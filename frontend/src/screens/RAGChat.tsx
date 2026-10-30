@@ -19,6 +19,13 @@ interface RAGChatProps {
   onClose?: () => void;
   onToggleMaximize?: () => void;
   isMaximized?: boolean;
+  user?: {
+    name?: string;
+    email?: string;
+    user_id?: string;
+    [key: string]: any;
+  } | null;
+  userName?: string;
 }
 
 export interface RetrievedDocument {
@@ -117,8 +124,138 @@ export const formatStageTitle = (stage: string): string => {
   }
 };
 
-export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose, onToggleMaximize, isMaximized }) => {
-  const [suggestions, setSuggestions] = useState([{ icon: 'table', color: 'text-blue-700', title: 'Count source records', query: 'Count records' }]);
+export const getTimeGreeting = (date: Date = new Date()): string => {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 22) return 'Good evening';
+  return 'Good evening';
+};
+
+/**
+ * Extracts a clean, human-friendly display name (NOT an email address).
+ * If the user's name or id contains an email, the domain is stripped and
+ * the username portion is cleanly formatted.
+ */
+export const resolveUserName = (
+  user?: { name?: string; email?: string; user_id?: string; [key: string]: any } | null,
+  fallbackName?: string
+): string => {
+  if (fallbackName && typeof fallbackName === 'string' && fallbackName.trim()) {
+    const trimmed = fallbackName.trim();
+    if (trimmed.includes('@')) {
+      const handle = trimmed.split('@')[0].trim();
+      return handle
+        .replace(/[._-]+/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+    }
+    return trimmed;
+  }
+
+  let candidate = user?.name || user?.user_id || '';
+
+  if (!candidate && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const stored = localStorage.getItem('auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        candidate = parsed.name || parsed.user_id || parsed.email || '';
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  candidate = candidate.trim();
+
+  // If candidate is an email or contains '@', strip domain and format username
+  if (candidate.includes('@')) {
+    const handle = candidate.split('@')[0].trim();
+    const formatted = handle
+      .replace(/[._-]+/g, ' ')
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+    return formatted || 'User';
+  }
+
+  if (candidate) {
+    const words = candidate.split(' ').filter(Boolean);
+    if (words.length > 0) {
+      return words
+        .map(w => (w.length <= 2 && w === w.toUpperCase() ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' ');
+    }
+    return candidate;
+  }
+
+  return 'User';
+};
+
+export const getUserInitials = (name: string): string => {
+  if (!name || name === 'User') return 'U';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+interface PromptSuggestion {
+  icon: string;
+  color: string;
+  title: string;
+  query: string;
+  badge?: string;
+}
+
+const DEFAULT_SUGGESTIONS: PromptSuggestion[] = [
+  {
+    icon: 'table_rows',
+    color: 'text-indigo-600',
+    title: 'Count source records',
+    query: 'Count records',
+    badge: 'Summary',
+  },
+  {
+    icon: 'insights',
+    color: 'text-violet-600',
+    title: 'Executive KPI Summary',
+    query: 'Summarize top sales KPIs and performance drivers',
+    badge: 'Insights',
+  },
+  {
+    icon: 'bar_chart',
+    color: 'text-sky-600',
+    title: 'Revenue & Margin Trends',
+    query: 'Plot monthly revenue and margin trends',
+    badge: 'Visualization',
+  },
+  {
+    icon: 'database',
+    color: 'text-emerald-600',
+    title: 'Vector Grounding Audit',
+    query: 'Search vector partitions for fulfillment status',
+    badge: 'Vector Engine',
+  },
+];
+
+export const RAGChat: React.FC<RAGChatProps> = ({
+  onNavigate,
+  isActive,
+  onClose,
+  onToggleMaximize,
+  isMaximized,
+  user,
+  userName,
+}) => {
+  const displayName = resolveUserName(user, userName);
+  const userInitials = getUserInitials(displayName);
+  const [suggestions, setSuggestions] = useState<PromptSuggestion[]>(DEFAULT_SUGGESTIONS);
   useEffect(() => {
     const context = selectedContext();
     if (!context) return;
@@ -126,11 +263,23 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
     getSemanticModels(context.datasetId, context.version).then(models => {
       const model = models.find(m => m.revision === context.semanticRevision && m.status === 'approved');
       if (cancelled || !model) return;
-      setSuggestions([{ icon: 'table', color: 'text-blue-700', title: 'Count source records', query: 'Count records' },
-        ...model.fields.filter(f => f.role === 'measure' && f.default_aggregation).slice(0, 3).map(f => ({ icon: 'bar_chart', color: 'text-blue-700', title: `${f.default_aggregation} ${f.semantic_name}`, query: `${f.default_aggregation} ${f.name}` }))]);
+      const dynamicMeasures = model.fields
+        .filter(f => f.role === 'measure' && f.default_aggregation)
+        .slice(0, 3)
+        .map(f => ({
+          icon: 'bar_chart',
+          color: 'text-indigo-600',
+          title: `${f.default_aggregation} ${f.semantic_name}`,
+          query: `${f.default_aggregation} ${f.name}`,
+          badge: 'Measure',
+        }));
+      if (dynamicMeasures.length > 0) {
+        setSuggestions([DEFAULT_SUGGESTIONS[0], ...dynamicMeasures]);
+      }
     }).catch(() => { /* The semantic review workflow displays configuration errors. */ });
     return () => { cancelled = true; };
   }, []);
+
   // Model and input state
   const [inputText, setInputText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -313,7 +462,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
           id: m.MESSAGE_ID || `msg-${Math.random()}`,
           sender: m.ROLE === 'user' ? 'user' : 'agent',
           timestamp: formattedTime,
-          userRole: m.ROLE === 'user' ? 'You · Analytics Director' : undefined,
+          userRole: m.ROLE === 'user' ? `You · ${displayName}` : undefined,
           text: m.CONTENT,
           agentMeta: m.ROLE !== 'user' ? {
             latency: metaObj.latency || 'Not available',
@@ -469,7 +618,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
       id: `user-${Date.now()}`,
       sender: 'user',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      userRole: 'You · Analytics Director',
+      userRole: `You · ${displayName}`,
       text: query,
     };
 
@@ -536,7 +685,6 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
     );
 
     setIsSubmitting(true);
-
 
     // Handle stage updates from SSE
     const handleStep = (step: ProcessingStep) => {
@@ -607,13 +755,14 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
         let metadata: any = s.METADATA || {};
         if (typeof metadata === 'string') { try { metadata = JSON.parse(metadata); } catch { metadata = {}; } }
         return ({
-        id: s.ID || `src-${idx}`,
-        source: metadata.source || 'Selected dataset',
-        tableOrCollection: metadata.dataset_id || metadata.context?.dataset_id || 'Dataset evidence',
-        snippet: s.TEXT_CHUNK || 'Retrieved semantic document chunk',
-        relevanceScore: typeof s.SCORE === 'number' ? Number(s.SCORE.toFixed(3)) : null,
-        timestamp: 'Indexed Chunk',
-      }); });
+          id: s.ID || `src-${idx}`,
+          source: metadata.source || 'Selected dataset',
+          tableOrCollection: metadata.dataset_id || metadata.context?.dataset_id || 'Dataset evidence',
+          snippet: s.TEXT_CHUNK || 'Retrieved semantic document chunk',
+          relevanceScore: typeof s.SCORE === 'number' ? Number(s.SCORE.toFixed(3)) : null,
+          timestamp: 'Indexed Chunk',
+        });
+      });
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
@@ -719,46 +868,46 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
   const groups: ('Today' | 'Yesterday' | 'Previous 7 Days' | 'Older')[] = ['Today', 'Yesterday', 'Previous 7 Days', 'Older'];
 
   return (
-    <div className="flex w-full h-full overflow-hidden rounded-2xl bg-white border border-[#E2E8F0] shadow-sm relative select-auto">
+    <div className="flex w-full h-full overflow-hidden rounded-2xl bg-white border border-slate-200/80 shadow-sm relative select-auto font-sans">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed top-20 right-4 sm:right-8 z-50 bg-[#0F172A] text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 font-label-md text-label-md animate-in fade-in slide-in-from-top-2 border border-slate-700/60">
-          <span className="material-symbols-outlined text-[17px] text-[#22C55E]">check_circle</span>
+        <div className="fixed top-20 right-4 sm:right-8 z-50 bg-slate-900/95 backdrop-blur-md text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 font-label-md text-label-md animate-in fade-in slide-in-from-top-2 border border-slate-700/60">
+          <span className="material-symbols-outlined text-[17px] text-emerald-400">check_circle</span>
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* Delete Confirmation Modal */}
       {threadToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-[#CBD5E1] animate-in zoom-in-95 duration-150"
+            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3.5 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#FEE2E2] text-[#DC2626] flex items-center justify-center shrink-0 border border-[#FECACA]">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0 border border-rose-200/70">
                 <span className="material-symbols-outlined text-[22px]">delete_forever</span>
               </div>
               <div className="flex flex-col">
-                <h3 className="font-headline-sm text-[#0F172A] font-semibold">Delete Conversation?</h3>
-                <p className="text-body-sm text-[#475569] mt-1 leading-relaxed">
-                  Are you sure you want to permanently delete <strong className="text-[#0F172A]">"{threadToDelete.title}"</strong>? This will remove all prompt history, retrieved vectors, and charts in this session.
+                <h3 className="font-headline-sm text-slate-900 font-semibold">Delete Conversation?</h3>
+                <p className="text-body-sm text-slate-600 mt-1 leading-relaxed">
+                  Are you sure you want to permanently delete <strong className="text-slate-900">"{threadToDelete.title}"</strong>? This will remove all prompt history, retrieved vectors, and charts in this session.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#E2E8F0]">
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setThreadToDelete(null)}
-                className="px-4 py-2 rounded-xl text-body-sm font-medium text-[#475569] hover:bg-[#F1F5F9] transition-colors"
+                className="px-4 py-2 rounded-xl text-body-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDeleteThreadConfirmed}
-                className="px-4 py-2 rounded-xl text-body-sm font-medium bg-[#DC2626] hover:bg-[#B91C1C] text-white shadow-xs transition-colors flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl text-body-sm font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer active:scale-95"
               >
                 <span className="material-symbols-outlined text-[16px]">delete</span>
                 <span>Delete Chat</span>
@@ -770,16 +919,16 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
       {/* Rename Conversation Modal */}
       {threadToRename && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-[#CBD5E1] animate-in zoom-in-95 duration-150"
+            className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-[20px] text-[#2563EB]">edit</span>
-              <h3 className="font-headline-sm text-[#0F172A] font-semibold">Rename Conversation</h3>
+              <span className="material-symbols-outlined text-[20px] text-indigo-600">edit</span>
+              <h3 className="font-headline-sm text-slate-900 font-semibold">Rename Conversation</h3>
             </div>
-            <p className="text-body-sm text-[#475569] mb-3">
+            <p className="text-body-sm text-slate-600 mb-3">
               Enter a concise descriptive title for this session thread.
             </p>
             <input
@@ -790,21 +939,21 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 if (e.key === 'Enter') handleRenameThreadConfirmed();
                 if (e.key === 'Escape') setThreadToRename(null);
               }}
-              className="w-full h-10 px-3 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] font-body-md focus:outline-none focus:border-[#2563EB] mb-4"
+              className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-body-md focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 mb-4 transition-all"
               autoFocus
             />
             <div className="flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setThreadToRename(null)}
-                className="px-4 py-2 rounded-xl text-body-sm font-medium text-[#475569] hover:bg-[#F1F5F9] transition-colors"
+                className="px-4 py-2 rounded-xl text-body-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleRenameThreadConfirmed}
-                className="px-4 py-2 rounded-xl text-body-sm font-medium bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-xs transition-colors"
+                className="px-4 py-2 rounded-xl text-body-sm font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-xs transition-all active:scale-95 cursor-pointer"
               >
                 Save
               </button>
@@ -816,20 +965,20 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
       {/* SAP AI Core Graph Enlarge Modal */}
       {previewGraphModalUrl && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in"
           onClick={() => setPreviewGraphModalUrl(null)}
         >
           <div
-            className="w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl p-4 sm:p-6 shadow-2xl border border-slate-300 flex flex-col animate-in zoom-in-95 duration-150"
+            className="w-full max-w-4xl max-h-[90vh] bg-white rounded-2xl p-4 sm:p-6 shadow-2xl border border-slate-200 flex flex-col animate-in zoom-in-95 duration-150"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 shrink-0">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[20px] text-[#7C3AED]">insert_chart</span>
-                <h3 className="font-headline-sm text-sm sm:text-base text-[#0F172A] font-semibold">
+                <span className="material-symbols-outlined text-[20px] text-violet-600">insert_chart</span>
+                <h3 className="font-headline-sm text-sm sm:text-base text-slate-900 font-semibold">
                   {previewGraphModalUrl.title ? `${previewGraphModalUrl.title.charAt(0).toUpperCase() + previewGraphModalUrl.title.slice(1)} Visualization` : 'SAP AI Core Graph Generation'}
                 </h3>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full border border-[#DDD6FE]">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 bg-violet-50 px-2.5 py-0.5 rounded-full border border-violet-200">
                   SAP AI Core
                 </span>
               </div>
@@ -837,7 +986,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 <a
                   href={previewGraphModalUrl.url}
                   download="generated_analytics_graph.png"
-                  className="h-8 px-3 rounded-lg bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#0F172A] text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+                  className="h-8.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[15px]">download</span>
                   <span>Download PNG</span>
@@ -845,13 +994,13 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 <button
                   type="button"
                   onClick={() => setPreviewGraphModalUrl(null)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                  className="w-8.5 h-8.5 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto flex items-center justify-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+            <div className="flex-1 overflow-auto flex items-center justify-center p-3 bg-slate-50/70 rounded-xl border border-slate-100">
               <img
                 src={previewGraphModalUrl.url}
                 alt="Enlarged SAP AI Core Graph"
@@ -865,7 +1014,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
       {/* Chat History Overlay Backdrop (covers current chat when drawer is open) */}
       {isSidebarOpen && (
         <div
-          className="absolute inset-0 z-30 bg-black/25 backdrop-blur-[1px] transition-opacity duration-300 animate-in fade-in"
+          className="absolute inset-0 z-30 bg-slate-900/20 backdrop-blur-[1px] transition-opacity duration-300 animate-in fade-in"
           onClick={() => setIsSidebarOpen(false)}
           aria-hidden="true"
         />
@@ -876,20 +1025,20 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
       {/* ============================================================ */}
       <aside
         className={`
-          absolute inset-y-0 left-0 z-40 w-[280px] sm:w-[310px] max-w-[85%]
-          bg-[#F8FAFC] border-r border-[#E2E8F0] flex flex-col justify-between
-          transition-all duration-300 ease-in-out p-3 overflow-hidden h-full
+          absolute inset-y-0 left-0 z-40 w-[285px] sm:w-[320px] max-w-[85%]
+          bg-slate-50/95 backdrop-blur-md border-r border-slate-200/90 flex flex-col justify-between
+          transition-all duration-300 ease-in-out p-3.5 overflow-hidden h-full
           ${isSidebarOpen ? 'translate-x-0 pointer-events-auto shadow-2xl opacity-100 visible' : '-translate-x-full pointer-events-none shadow-none opacity-0 invisible'}
         `}
         aria-label="Chat history sessions"
       >
         <div className="flex flex-col h-full min-w-[245px] overflow-hidden">
           {/* Top Actions: New Chat & Collapse */}
-          <div className="flex items-center gap-2 mb-2.5 shrink-0">
+          <div className="flex items-center gap-2 mb-3 shrink-0">
             <button
               type="button"
               onClick={handleCreateNewChat}
-              className="flex-1 h-9 px-3 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-label-md text-label-md font-medium flex items-center justify-center gap-2 transition-all shadow-xs"
+              className="flex-1 h-9 px-3 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-indigo-700 hover:from-violet-700 hover:to-indigo-800 text-white font-label-md text-label-md font-medium flex items-center justify-center gap-2 transition-all shadow-sm shadow-indigo-500/20 active:scale-95 cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
               <span>New Chat</span>
@@ -900,7 +1049,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
               type="button"
               onClick={() => setIsSidebarOpen(false)}
               title="Collapse history sidebar"
-              className="w-9 h-9 rounded-xl bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer"
+              className="w-9 h-9 rounded-xl bg-white hover:bg-slate-100 border border-slate-200/90 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors shrink-0 shadow-2xs cursor-pointer active:scale-95"
               aria-label="Collapse history sidebar"
             >
               <span className="material-symbols-outlined text-[18px]">left_panel_close</span>
@@ -908,21 +1057,21 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
           </div>
 
           {/* Quick Search Input */}
-          <div className="relative mb-2.5 shrink-0">
-            <span className="material-symbols-outlined absolute left-2.5 top-2 text-[#64748B] text-[16px] pointer-events-none">
+          <div className="relative mb-3 shrink-0">
+            <span className="material-symbols-outlined absolute left-2.5 top-2.5 text-slate-400 text-[16px] pointer-events-none">
               search
             </span>
             <input
               type="text"
               value={searchThreads}
               onChange={(e) => setSearchThreads(e.target.value)}
-              placeholder="Search chat history..."
-              className="w-full h-8 pl-8 pr-7 rounded-xl bg-white border border-[#E2E8F0] text-xs text-[#0F172A] placeholder:text-[#64748B] focus:outline-none focus:border-[#7C3AED] transition-colors"
+              placeholder="Search conversations..."
+              className="w-full h-8.5 pl-8 pr-7 rounded-xl bg-white border border-slate-200/90 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 transition-all shadow-2xs"
             />
             {searchThreads && (
               <button
                 onClick={() => setSearchThreads('')}
-                className="absolute right-2 top-1.5 text-[#64748B] hover:text-[#0F172A]"
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-700"
               >
                 <span className="material-symbols-outlined text-[14px]">close</span>
               </button>
@@ -930,11 +1079,23 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
           </div>
 
           {/* Controlled Scrollable Thread List */}
-          <div className="flex-1 overflow-y-auto space-y-3 pr-0.5 select-none scroll-touch min-h-0">
-            {loadingSessions && <div role="status" className="py-2 text-center text-xs text-[#64748B]">Loading chat sessions...</div>}
-            {sessionsError && <div role="alert" className="py-2 text-center text-xs text-red-600">{sessionsError} <button onClick={() => setSessionsRetry(value => value + 1)} className="underline">Retry</button></div>}
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-0.5 select-none scroll-touch min-h-0">
+            {loadingSessions && (
+              <div role="status" className="py-3 text-center text-xs text-slate-500 flex items-center justify-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px] animate-spin text-indigo-600">progress_activity</span>
+                <span>Loading chat sessions...</span>
+              </div>
+            )}
+            {sessionsError && (
+              <div role="alert" className="py-2 text-center text-xs text-rose-600">
+                {sessionsError}{' '}
+                <button onClick={() => setSessionsRetry(value => value + 1)} className="underline font-semibold ml-1 cursor-pointer">
+                  Retry
+                </button>
+              </div>
+            )}
             {filteredThreads.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[#64748B]">
+              <div className="py-8 text-center text-xs text-slate-400">
                 No conversations found
               </div>
             ) : (
@@ -944,41 +1105,41 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
                 return (
                   <div key={group} className="space-y-1">
-                    <div className="px-2 text-[10px] uppercase font-semibold text-[#64748B] tracking-wider mb-1">
+                    <div className="px-2 text-[10px] uppercase font-semibold text-slate-400 tracking-wider mb-1">
                       {group}
                     </div>
 
                     {groupThreads.map(thread => {
-                      const isActive = thread.id === activeThreadId;
+                      const isCurrent = thread.id === activeThreadId;
                       const isMenuOpen = activeMenuThreadId === thread.id;
 
                       return (
                         <div
                           key={thread.id}
-                          className={`group relative flex items-center justify-between rounded-xl px-2.5 py-2 transition-all cursor-pointer ${isActive
-                              ? 'bg-white border border-[#CBD5E1] shadow-xs text-[#0F172A]'
-                              : 'hover:bg-white text-[#475569] border border-transparent'
+                          className={`group relative flex items-center justify-between rounded-xl px-2.5 py-2 transition-all cursor-pointer ${isCurrent
+                              ? 'bg-white border border-slate-200/90 shadow-xs text-slate-900'
+                              : 'hover:bg-white/80 text-slate-600 hover:text-slate-900 border border-transparent'
                             }`}
                           onClick={() => handleSelectThread(thread.id)}
                         >
                           {/* Active Indicator Bar */}
-                          {isActive && (
-                            <div className="absolute left-0 top-2 bottom-2 w-1 bg-[#7C3AED] rounded-r" />
+                          {isCurrent && (
+                            <div className="absolute left-0 top-2 bottom-2 w-1 bg-gradient-to-b from-violet-600 to-indigo-600 rounded-r" />
                           )}
 
                           {/* Thread Title & Subtitle */}
                           <div className="flex flex-col min-w-0 pr-1 pl-1 flex-1">
-                            <span className={`text-xs truncate ${isActive ? 'font-semibold text-[#0F172A]' : 'font-medium group-hover:text-[#0F172A]'}`}>
+                            <span className={`text-xs truncate ${isCurrent ? 'font-semibold text-slate-900' : 'font-medium group-hover:text-slate-900'}`}>
                               {thread.title}
                             </span>
-                            <span className="text-[11px] text-[#64748B] truncate mt-0.5">
+                            <span className="text-[11px] text-slate-400 truncate mt-0.5">
                               {thread.subtitle || 'Empty session'}
                             </span>
                           </div>
 
                           {/* Three-Dot Menu Action Button or Session Loading Spinner */}
                           {loadingSessionId === thread.id ? (
-                            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ml-1 text-[#7C3AED]" title="Loading session data...">
+                            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ml-1 text-indigo-600" title="Loading session data...">
                               <span className="material-symbols-outlined text-[17px] animate-spin">progress_activity</span>
                             </div>
                           ) : (
@@ -994,63 +1155,63 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                                 }}
                                 title="Chat options"
                                 aria-label="Chat options"
-                                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-opacity hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] ${isMenuOpen ? 'opacity-100 bg-[#F1F5F9] text-[#0F172A]' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-slate-100 text-slate-400 hover:text-slate-800 ${isMenuOpen ? 'opacity-100 bg-slate-100 text-slate-800' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
                                   }`}
                               >
                                 <span className="material-symbols-outlined text-[17px]">more_vert</span>
                               </button>
 
-                            {/* Three-dot Dropdown Menu */}
-                            {isMenuOpen && (
-                              <div
-                                className="absolute right-0 top-8 w-44 rounded-xl bg-white border border-[#E2E8F0] shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 text-left"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {/* Rename Action */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMenuThreadId(null);
-                                    setThreadToRename(thread);
-                                    setRenameTitleInput(thread.title);
-                                  }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors"
+                              {/* Three-dot Dropdown Menu */}
+                              {isMenuOpen && (
+                                <div
+                                  className="absolute right-0 top-8 w-44 rounded-xl bg-white border border-slate-200 shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 text-left"
+                                  onClick={(e) => e.stopPropagation()}
                                 >
-                                  <span className="material-symbols-outlined text-[16px] text-[#64748B]">edit</span>
-                                  <span>Rename</span>
-                                </button>
+                                  {/* Rename Action */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveMenuThreadId(null);
+                                      setThreadToRename(thread);
+                                      setRenameTitleInput(thread.title);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] text-slate-400">edit</span>
+                                    <span>Rename</span>
+                                  </button>
 
-                                {/* Export Action */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMenuThreadId(null);
-                                    handleExportMarkdown(thread);
-                                  }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#0F172A] hover:bg-[#F1F5F9] flex items-center gap-2 transition-colors"
-                                >
-                                  <span className="material-symbols-outlined text-[16px] text-[#64748B]">download</span>
-                                  <span>Export MD</span>
-                                </button>
+                                  {/* Export Action */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveMenuThreadId(null);
+                                      handleExportMarkdown(thread);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] text-slate-400">download</span>
+                                    <span>Export MD</span>
+                                  </button>
 
-                                <div className="my-1 border-t border-[#E2E8F0]" />
+                                  <div className="my-1 border-t border-slate-100" />
 
-                                {/* Delete Chat Action */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveMenuThreadId(null);
-                                    setThreadToDelete(thread);
-                                  }}
-                                  className="w-full px-3 py-1.5 text-xs text-[#DC2626] hover:bg-[#FEF2F2] flex items-center gap-2 transition-colors font-medium"
-                                >
-                                  <span className="material-symbols-outlined text-[16px] text-[#DC2626]">delete</span>
-                                  <span>Delete Chat</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                  {/* Delete Chat Action */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveMenuThreadId(null);
+                                      setThreadToDelete(thread);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition-colors font-medium cursor-pointer"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px] text-rose-600">delete</span>
+                                    <span>Delete Chat</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1061,12 +1222,12 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
           </div>
 
           {/* Sidebar Footer: HANA Memory Health Summary */}
-          <div className="pt-2.5 mt-2 border-t border-[#E2E8F0] flex items-center justify-between text-[11px] text-[#64748B] shrink-0">
+          <div className="pt-2.5 mt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
             <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]"></span>
-              <span className="font-mono text-[#0F172A]">3,248 Docs</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="font-mono text-slate-800">3,248 Docs</span>
             </div>
-            <span className="font-mono text-[10px] text-[#64748B]">HANA Vector 4.2</span>
+            <span className="font-mono text-[10px] text-slate-500 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200/80">HANA Vector 4.2</span>
           </div>
         </div>
       </aside>
@@ -1078,15 +1239,15 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
         {/* ============================================================ */}
         {/* CHAT HEADER: Persistent, Stable Top Control Bar */}
         {/* ============================================================ */}
-        <header className="h-[54px] sm:h-[58px] border-b border-[#E2E8F0] px-3 sm:px-4 flex items-center justify-between bg-white shrink-0 z-10 gap-2 sm:gap-3 w-full">
+        <header className="h-[56px] sm:h-[60px] border-b border-slate-200/80 px-3 sm:px-5 flex items-center justify-between bg-white/95 backdrop-blur-md shrink-0 z-10 gap-2 sm:gap-3 w-full">
           {/* Left: Sidebar Toggle Button + Auto-truncating Active Session Title with Dots */}
-          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1 overflow-hidden mr-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 overflow-hidden mr-2">
             {/* Sidebar Toggle Button */}
             <button
               type="button"
               onClick={() => setIsSidebarOpen(prev => !prev)}
               title={isSidebarOpen ? "Collapse chat history" : "Open chat history"}
-              className="w-8.5 h-8.5 rounded-full flex items-center justify-center text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors border border-[#E2E8F0] bg-white shrink-0 shadow-2xs cursor-pointer"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors border border-slate-200/80 bg-white shrink-0 shadow-2xs cursor-pointer active:scale-95"
               aria-label="Toggle chat history sidebar"
             >
               <span className="material-symbols-outlined text-[19px]">
@@ -1096,23 +1257,23 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
             {/* Active Thread Title & Metadata */}
             <div className="min-w-0 flex-1 overflow-hidden">
-              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                 <h2
                   title={activeThread?.title || 'Conversational Analytics'}
-                  className="font-headline-sm text-xs sm:text-sm text-[#0F172A] font-semibold truncate block leading-tight min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-xs md:max-w-md"
+                  className="font-headline-sm text-xs sm:text-sm text-slate-900 font-semibold truncate block leading-tight min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-xs md:max-w-md"
                 >
                   {activeThread?.title || 'Conversational Analytics'}
                 </h2>
-                <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#DCFCE7] text-[#166534] text-[10px] font-medium border border-[#BBF7D0] shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] animate-pulse"></span>
+                <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-medium border border-emerald-200/80 shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span>HANA Vector Synced</span>
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-[#64748B] truncate leading-tight mt-0.5 min-w-0">
-                <span>us10-prod</span>
-                <span aria-hidden="true">·</span>
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-500 truncate leading-tight mt-0.5 min-w-0">
+                <span className="font-mono text-slate-600">us10-prod</span>
+                <span aria-hidden="true" className="text-slate-300">·</span>
                 <span>{messages.length} msgs</span>
-                <span aria-hidden="true" className="hidden sm:inline">·</span>
+                <span aria-hidden="true" className="text-slate-300 hidden sm:inline">·</span>
                 <span className="hidden sm:inline">{activeThread?.timestamp || 'Active'}</span>
               </div>
             </div>
@@ -1125,9 +1286,9 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
               <button
                 onClick={() => handleExportMarkdown(activeThread)}
                 title="Export thread as Markdown transcript"
-                className="h-8.5 px-3 rounded-full bg-white hover:bg-[#F8FAFC] text-[#0F172A] border border-[#CBD5E1] text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs shrink-0 whitespace-nowrap"
+                className="h-8.5 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200/90 text-xs font-medium inline-flex items-center gap-1.5 transition-all shadow-2xs hover:shadow-xs shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[15px] text-[#64748B]">download</span>
+                <span className="material-symbols-outlined text-[15px] text-slate-500">download</span>
                 <span>Export</span>
               </button>
             )}
@@ -1143,9 +1304,9 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 }
               }}
               title="Clear all messages in active session"
-              className="h-8.5 px-3 rounded-full bg-white hover:bg-[#F8FAFC] text-[#0F172A] border border-[#CBD5E1] text-xs font-medium inline-flex items-center gap-1.5 transition-colors shadow-2xs shrink-0 whitespace-nowrap cursor-pointer"
+              className="h-8.5 px-3 rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200/90 text-xs font-medium inline-flex items-center gap-1.5 transition-all shadow-2xs hover:shadow-xs shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
             >
-              <span className="material-symbols-outlined text-[15px] text-[#64748B]">restart_alt</span>
+              <span className="material-symbols-outlined text-[15px] text-slate-500">restart_alt</span>
               <span>Clear</span>
             </button>
 
@@ -1154,7 +1315,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 type="button"
                 onClick={onToggleMaximize}
                 title={isMaximized ? "Restore window" : "Maximize chat window"}
-                className="w-8.5 h-8.5 rounded-full bg-white hover:bg-[#F8FAFC] text-[#475569] hover:text-[#0F172A] border border-[#CBD5E1] inline-flex items-center justify-center transition-colors shadow-2xs shrink-0 cursor-pointer"
+                className="w-8.5 h-8.5 rounded-xl bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border border-slate-200/90 inline-flex items-center justify-center transition-all shadow-2xs hover:shadow-xs shrink-0 active:scale-95 cursor-pointer"
                 aria-label={isMaximized ? "Restore window" : "Maximize chat window"}
               >
                 <span className="material-symbols-outlined text-[17px]">
@@ -1168,7 +1329,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                 type="button"
                 onClick={onClose}
                 title="Close chat"
-                className="w-8.5 h-8.5 rounded-full bg-white hover:bg-rose-50 text-[#475569] hover:text-rose-600 border border-[#CBD5E1] hover:border-rose-200 inline-flex items-center justify-center transition-colors shadow-2xs shrink-0 cursor-pointer"
+                className="w-8.5 h-8.5 rounded-xl bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200/90 hover:border-rose-200 inline-flex items-center justify-center transition-all shadow-2xs hover:shadow-xs shrink-0 active:scale-95 cursor-pointer"
                 aria-label="Close chat"
               >
                 <span className="material-symbols-outlined text-[18px]">close</span>
@@ -1180,91 +1341,93 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
         {/* ============================================================ */}
         {/* CHAT CONVERSATION AREA: The Primary Scrollable Region */}
         {/* ============================================================ */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7 space-y-6 scroll-touch min-h-0 bg-[#F8FAFC]/50 relative">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6 scroll-touch min-h-0 bg-gradient-to-b from-slate-50/40 via-white to-slate-50/30 relative">
           {sessionLoadError ? (
-            <div role="alert" className="py-8 text-center text-sm text-red-600">{sessionLoadError} <button onClick={() => void handleSelectThread(activeThreadId)} className="underline">Retry</button></div>
+            <div role="alert" className="py-8 text-center text-sm text-rose-600 font-medium">
+              {sessionLoadError}{' '}
+              <button onClick={() => void handleSelectThread(activeThreadId)} className="underline ml-1 font-semibold cursor-pointer">
+                Retry
+              </button>
+            </div>
           ) : loadingSessionId ? (
             /* ============================================================ */
             /* Session Loading State: Visible while selected session loads  */
             /* ============================================================ */
             <div className="h-full min-h-[340px] flex flex-col items-center justify-center max-w-sm mx-auto text-center px-4 py-16 animate-in fade-in duration-150">
-              <div className="w-14 h-14 rounded-2xl bg-[#F5F3FF] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] shadow-sm mb-4">
-                <span className="material-symbols-outlined text-[28px] animate-spin text-[#7C3AED]">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-50 to-indigo-50 border border-violet-200/70 flex items-center justify-center text-indigo-600 shadow-sm mb-4">
+                <span className="material-symbols-outlined text-[28px] animate-spin text-indigo-600">
                   progress_activity
                 </span>
               </div>
-              <h3 className="font-headline-sm text-base text-[#0F172A] font-semibold">
+              <h3 className="font-headline-sm text-base text-slate-900 font-semibold">
                 Loading Conversation History...
               </h3>
-              <p className="text-body-sm text-xs text-[#64748B] mt-1.5 max-w-xs leading-relaxed">
+              <p className="text-body-sm text-xs text-slate-500 mt-1.5 max-w-xs leading-relaxed">
                 Retrieving session messages and vector grounding records
               </p>
             </div>
           ) : messages.length === 0 ? (
             /* ============================================================ */
-            /* Empty State: Clean Welcome & Suggested Prompt Starters */
+            /* Empty State: Modern Enterprise AI Welcome & Prompt Starters  */
             /* ============================================================ */
-            <div className="h-full flex flex-col items-center justify-center max-w-xl mx-auto text-center px-4 py-6">
-              <div className="w-13 h-13 rounded-2xl bg-[#F5F3FF] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] mb-3.5 shadow-sm">
-                <span className="material-symbols-outlined text-[26px]">smart_toy</span>
+            <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center px-4 py-8">
+              {/* AI Squircle Emblem with glowing ambient ring */}
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-sky-500 text-white flex items-center justify-center shadow-lg shadow-indigo-500/25 ring-8 ring-indigo-50/70 mb-4 animate-in zoom-in-90 duration-300">
+                <span className="material-symbols-outlined text-[28px]">auto_awesome</span>
               </div>
-              <h3 className="font-headline-md text-lg sm:text-[20px] text-[#0F172A] font-semibold">
-                How can I assist your enterprise analytics?
-              </h3>
-              <p className="text-body-sm text-[#475569] mt-1.5 mb-5 max-w-md leading-relaxed">
-                Ask about approved field definitions, calculate exact metrics, or request a chart for the selected dataset.
+
+              {/* Dynamic Greeting Title */}
+              <div className="space-y-1.5 mb-2">
+                <h3 className="font-headline-md text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                  <span className="bg-gradient-to-r from-violet-700 via-indigo-700 to-slate-900 bg-clip-text text-transparent">
+                    {getTimeGreeting()}, {displayName}
+                  </span>
+                </h3>
+                <p className="text-base sm:text-lg font-medium text-slate-700">
+                  How can I assist your enterprise analytics today?
+                </p>
+              </div>
+
+              <p className="text-body-sm text-xs sm:text-sm text-slate-500 mt-1 mb-6 max-w-lg leading-relaxed">
+                Ask natural language questions about approved field definitions, calculate metrics with in-memory SQL, or synthesize visual charts grounded in SAP HANA Cloud.
               </p>
 
               {/* Suggested prompt starter cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full text-left">
                 {suggestions.map((card, idx) => (
                   <button
                     key={idx}
                     type="button"
                     onClick={() => handleSuggestedPrompt(card.query)}
-                    className="p-3 rounded-xl bg-white hover:bg-[#F1F5F9] border border-[#E2E8F0] text-left transition-all group flex flex-col justify-between shadow-2xs hover:border-[#CBD5E1]"
+                    className="group relative p-3.5 sm:p-4 rounded-2xl bg-white hover:bg-gradient-to-br hover:from-white hover:to-indigo-50/30 border border-slate-200/90 hover:border-indigo-300 shadow-2xs hover:shadow-md transition-all duration-200 text-left flex flex-col justify-between cursor-pointer"
                   >
-                    <div className="flex items-center gap-2 text-[#0F172A] mb-1 font-semibold text-xs">
-                      <span className={`material-symbols-outlined text-[17px] ${card.color} transition-colors`}>
-                        {card.icon}
-                      </span>
-                      <span>{card.title}</span>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-50/80 text-indigo-600 flex items-center justify-center group-hover:scale-105 group-hover:bg-indigo-100/90 transition-all">
+                          <span className={`material-symbols-outlined text-[18px] ${card.color || 'text-indigo-600'}`}>
+                            {card.icon}
+                          </span>
+                        </div>
+                        <span className="font-semibold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">
+                          {card.title}
+                        </span>
+                      </div>
+                      {card.badge && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200/80 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                          {card.badge}
+                        </span>
+                      )}
                     </div>
-                    <span className="text-[11px] text-[#64748B] line-clamp-2 leading-relaxed">
-                      {card.query}
-                    </span>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 group-hover:text-slate-700">
+                      <span className="line-clamp-2 leading-relaxed pr-2">
+                        {card.query}
+                      </span>
+                      <span className="material-symbols-outlined text-[16px] text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0">
+                        arrow_forward
+                      </span>
+                    </div>
                   </button>
                 ))}
-              </div>
-
-              {/* Core Platform Modules & Quick Tools */}
-              <div className="mt-4 pt-3 border-t border-[#E2E8F0] w-full flex items-center justify-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => onNavigate('build-your-kpi-graph-studio')}
-                  className="px-3 py-1.5 rounded-xl bg-[#F5F3FF] hover:bg-[#EDE9FE] text-[#6D28D9] border border-[#DDD6FE] text-xs font-medium inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[16px] text-[#7C3AED]">query_stats</span>
-                  <span>Build Your KPI (Studio)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onNavigate('upload-dataset')}
-                  className="px-3 py-1.5 rounded-xl bg-[#F0FDF4] hover:bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0] text-xs font-medium inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[16px] text-[#16A34A]">upload_file</span>
-                  <span>Upload Dataset</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onNavigate('data-explorer')}
-                  className="px-3 py-1.5 rounded-xl bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1D4ED8] border border-[#BFDBFE] text-xs font-medium inline-flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[16px] text-[#2563EB]">search</span>
-                  <span>Search &amp; Data Explorer</span>
-                </button>
               </div>
             </div>
           ) : (
@@ -1275,19 +1438,19 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
               if (msg.sender === 'user') {
                 return (
                   /* User Message Bubble (Right-aligned) */
-                  <div key={msg.id} className="flex justify-end items-start gap-2.5 max-w-2xl ml-auto">
+                  <div key={msg.id} className="flex justify-end items-start gap-2.5 sm:gap-3 max-w-2xl ml-auto animate-in fade-in duration-150">
                     <div className="flex flex-col items-end">
-                      <div className="flex items-center gap-2 mb-1 text-[11px] text-[#64748B]">
-                        <span>{msg.userRole || 'You'}</span>
+                      <div className="flex items-center gap-2 mb-1.5 text-[11px] text-slate-500">
+                        <span>{msg.userRole || `You · ${displayName}`}</span>
                         <span aria-hidden="true">·</span>
                         <span>{msg.timestamp}</span>
                       </div>
-                      <div className="bg-[#0F172A] text-white px-4 py-2.5 rounded-2xl rounded-tr-xs shadow-sm font-body-md text-sm leading-relaxed break-words">
+                      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white px-4.5 py-3 rounded-2xl rounded-tr-xs shadow-sm border border-slate-800/80 font-body-md text-sm leading-relaxed break-words font-normal">
                         {msg.text}
                       </div>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-[#E2E8F0] text-[#0F172A] flex items-center justify-center text-xs font-semibold shrink-0 mt-3.5 shadow-2xs border border-[#CBD5E1]">
-                      AD
+                    <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-white flex items-center justify-center text-xs font-semibold shrink-0 mt-3.5 shadow-2xs border border-slate-700/60" title={displayName}>
+                      {userInitials}
                     </div>
                   </div>
                 );
@@ -1299,9 +1462,9 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
               const IntentIcon = intentInfo.icon;
 
               return (
-                <div key={msg.id} className="flex items-start gap-3 max-w-4xl mr-auto">
-                  {/* Assistant Avatar */}
-                  <div className="w-8 h-8 rounded-xl bg-[#7C3AED] text-white flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <div key={msg.id} className="flex items-start gap-3 sm:gap-3.5 max-w-4xl mr-auto animate-in fade-in duration-200">
+                  {/* Assistant Avatar: Multi-color gradient squircle */}
+                  <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-sky-500 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-md shadow-indigo-500/20 ring-1 ring-white/60">
                     <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
                   </div>
 
@@ -1309,13 +1472,13 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                     {/* Assistant Header & Model Badge with Elevated Single Intent Badge */}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center flex-wrap gap-2">
-                        <span className="text-xs font-semibold text-[#0F172A]">
+                        <span className="text-xs font-semibold text-slate-900">
                           NEOVATIC Assistant
                         </span>
-                        <span aria-hidden="true" className="text-[#CBD5E1]">·</span>
+                        <span aria-hidden="true" className="text-slate-300">·</span>
                         {/* High-Level Polished Intent Badge */}
                         <div
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${intentInfo.pillClass}`}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${intentInfo.pillClass}`}
                           title={intentInfo.description}
                         >
                           <span className="relative flex h-1.5 w-1.5 shrink-0 items-center justify-center">
@@ -1327,28 +1490,28 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                           <IntentIcon className="w-3 h-3 shrink-0" />
                           <span>{intentInfo.label}</span>
                         </div>
-                        <span aria-hidden="true" className="text-[#CBD5E1]">·</span>
-                        <span className="text-[11px] text-[#7C3AED] font-medium px-2 py-0.5 rounded-full bg-[#F5F3FF] border border-[#DDD6FE]">
+                        <span aria-hidden="true" className="text-slate-300">·</span>
+                        <span className="text-[11px] text-violet-700 font-medium px-2 py-0.5 rounded-full bg-violet-50/80 border border-violet-200/70">
                           {msg.agentMeta?.model || 'Not reported'}
                         </span>
-                        <span aria-hidden="true" className="text-[#CBD5E1]">·</span>
-                        <span className="text-[11px] text-[#64748B] font-mono">
+                        <span aria-hidden="true" className="text-slate-300">·</span>
+                        <span className="text-[11px] text-slate-500 font-mono">
                           {msg.agentMeta?.latency || 'Not available'}
                         </span>
                       </div>
 
                       {/* Grounding Confidence Score */}
                       {msg.agentMeta?.cosineSim && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-[#166534] bg-[#DCFCE7] px-2 py-0.5 rounded-full border border-[#BBF7D0]">
-                          <span className="material-symbols-outlined text-[13px] text-[#16A34A]">verified</span>
+                        <div className="flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/80 font-medium">
+                          <span className="material-symbols-outlined text-[13px] text-emerald-600">verified</span>
                           <span>Match score {msg.agentMeta.cosineSim}</span>
                         </div>
                       )}
                     </div>
 
                     {/* Assistant Response Content Card */}
-                    <div className="bg-white border border-[#E2E8F0] rounded-2xl rounded-tl-xs p-4 sm:p-5 text-[#0F172A] text-sm leading-relaxed shadow-xs space-y-4">
-                      {/* Anthropic Claude & ChatGPT Style Step-wise Intent & Thinking Process */}
+                    <div className="bg-white/95 backdrop-blur-xs border border-slate-200/90 rounded-2xl rounded-tl-xs p-4 sm:p-5 text-slate-900 text-sm leading-relaxed shadow-[0_2px_12px_rgba(15,23,42,0.04)] space-y-4">
+                      {/* Step-wise Intent & Thinking Process */}
                       {msg.processing && msg.processing.length > 0 && (
                         <ThinkingProcess
                           steps={msg.processing}
@@ -1376,26 +1539,26 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                             onCodeCopy={() => showToast('Snippet copied to clipboard')}
                           />
                           {msg.isStreaming && (
-                            <span className="inline-block w-1.5 h-4 ml-1 bg-[#7C3AED] animate-pulse align-middle" />
+                            <span className="inline-block w-1.5 h-4 ml-1 bg-violet-600 animate-pulse align-middle" />
                           )}
                         </div>
                       )}
 
                       {/* Generated Graph Image (Powered by SAP AI Core) */}
                       {msg.graph_image && (
-                        <div className="bg-[#F8FAFC] rounded-xl p-3.5 sm:p-4 border border-[#CBD5E1] shadow-2xs space-y-2.5">
+                        <div className="bg-gradient-to-br from-slate-50/90 to-indigo-50/20 rounded-xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 font-label-md text-xs font-semibold text-[#0F172A]">
-                              <span className="material-symbols-outlined text-[17px] text-[#7C3AED]">analytics</span>
+                            <div className="flex items-center gap-2 font-label-md text-xs font-semibold text-slate-900">
+                              <span className="material-symbols-outlined text-[17px] text-violet-600">analytics</span>
                               <span>{msg.chart_type ? `${msg.chart_type.charAt(0).toUpperCase() + msg.chart_type.slice(1)} Chart` : 'Generated Analytics Visualization'}</span>
                             </div>
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#7C3AED] bg-[#F5F3FF] px-2 py-0.5 rounded-full border border-[#DDD6FE]">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-200">
                               SAP AI Core
                             </span>
                           </div>
                           <div
                             onClick={() => setPreviewGraphModalUrl({ url: msg.graph_image!, title: msg.chart_type })}
-                            className="relative group rounded-lg overflow-hidden border border-[#E2E8F0] bg-white cursor-pointer hover:border-[#7C3AED] transition-all shadow-xs"
+                            className="relative group rounded-lg overflow-hidden border border-slate-200 bg-white cursor-pointer hover:border-violet-400 transition-all shadow-xs"
                           >
                             <img
                               src={msg.graph_image}
@@ -1403,7 +1566,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                               className="w-full max-h-[380px] object-contain mx-auto group-hover:scale-[1.01] transition-transform duration-200"
                             />
                             <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                              <span className="px-3 py-1.5 rounded-full bg-white/95 text-[#0F172A] text-xs font-semibold shadow-md flex items-center gap-1.5 backdrop-blur-xs">
+                              <span className="px-3.5 py-1.5 rounded-full bg-white/95 text-slate-900 text-xs font-semibold shadow-md flex items-center gap-1.5 backdrop-blur-xs">
                                 <span className="material-symbols-outlined text-[15px]">zoom_in</span>
                                 <span>Click to Enlarge</span>
                               </span>
@@ -1414,12 +1577,12 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
                       {/* Key AI Insights Callout (if present and distinct) */}
                       {msg.insights && msg.insights !== msg.text && (
-                        <div className="bg-[#F5F3FF] border border-[#DDD6FE] rounded-xl p-3 space-y-1.5">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#7C3AED]">
+                        <div className="bg-gradient-to-r from-violet-50/80 to-purple-50/80 border border-violet-200/80 rounded-xl p-3.5 space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700">
                             <span className="material-symbols-outlined text-[16px]">lightbulb</span>
                             <span>Key Model Insights</span>
                           </div>
-                          <p className="text-xs text-[#4C1D95] leading-relaxed">
+                          <p className="text-xs text-purple-900 leading-relaxed">
                             {msg.insights}
                           </p>
                         </div>
@@ -1427,32 +1590,32 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
                       {/* Inline Analytical Chart Visualization (if present) */}
                       {msg.chartData && (
-                        <div className="bg-[#F8FAFC] rounded-xl p-3.5 sm:p-4 border border-[#E2E8F0] shadow-2xs space-y-3">
+                        <div className="bg-slate-50/80 rounded-xl p-3.5 sm:p-4 border border-slate-200 shadow-2xs space-y-3">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5 font-label-md text-xs font-semibold text-[#0F172A]">
-                              <span className="material-symbols-outlined text-[16px] text-[#2563EB]">bar_chart</span>
+                            <div className="flex items-center gap-1.5 font-label-md text-xs font-semibold text-slate-900">
+                              <span className="material-symbols-outlined text-[16px] text-indigo-600">bar_chart</span>
                               <span>{msg.chartData.title}</span>
                             </div>
-                            <span className="text-[11px] text-[#64748B] font-mono">
+                            <span className="text-[11px] text-slate-500 font-mono">
                               {msg.chartData.unit}
                             </span>
                           </div>
 
                           <div className="space-y-2.5 pt-1">
                             {msg.chartData.items.map((item, idx) => {
-                              const barColors = ['bg-[#7C3AED]', 'bg-[#2563EB]', 'bg-[#0D9488]', 'bg-[#4F46E5]'];
+                              const barColors = ['bg-violet-600', 'bg-indigo-600', 'bg-teal-600', 'bg-sky-600'];
                               const chosenColor = barColors[idx % barColors.length];
                               return (
                                 <div key={idx} className="space-y-1">
                                   <div className="flex items-center justify-between text-xs">
-                                    <span className="text-[#334155] font-medium truncate mr-2">
+                                    <span className="text-slate-700 font-medium truncate mr-2">
                                       {item.label}
                                     </span>
-                                    <span className="font-semibold text-[#0F172A] font-mono shrink-0">
+                                    <span className="font-semibold text-slate-900 font-mono shrink-0">
                                       {item.displayValue}
                                     </span>
                                   </div>
-                                  <div className="w-full h-2 rounded-full bg-[#E2E8F0] overflow-hidden">
+                                  <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
                                     <div
                                       className={`h-full rounded-full ${chosenColor} transition-all duration-500`}
                                       style={{ width: `${Math.min(item.value, 100)}%` }}
@@ -1467,12 +1630,12 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
                       {/* Risk Factors / Variances */}
                       {msg.riskFactors && msg.riskFactors.length > 0 && (
-                        <div className="bg-[#FEF3C7]/60 border border-[#FDE68A] rounded-xl p-3.5 space-y-2">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#92400E]">
-                            <span className="material-symbols-outlined text-[16px] text-[#D97706]">warning</span>
+                        <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+                            <span className="material-symbols-outlined text-[16px] text-amber-600">warning</span>
                             <span>Identified Variance Factors</span>
                           </div>
-                          <ul className="space-y-1.5 text-xs text-[#78350F] pl-5 list-disc">
+                          <ul className="space-y-1.5 text-xs text-amber-900 pl-5 list-disc">
                             {msg.riskFactors.map((rf, idx) => (
                               <li key={idx}>
                                 <strong>{rf.title}:</strong> {rf.desc}
@@ -1484,19 +1647,19 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
                       {/* Retrieved Documents & Grounding Accordion */}
                       {msg.retrievedDocs && msg.retrievedDocs.length > 0 && (
-                        <div className="pt-2 border-t border-[#E2E8F0]">
+                        <div className="pt-2 border-t border-slate-200/80">
                           <button
                             type="button"
                             onClick={() =>
                               setExpandedDocMessageId(areDocsExpanded ? null : msg.id)
                             }
-                            className="w-full flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E2E8F0] text-xs font-medium text-[#475569] transition-colors"
+                            className="w-full flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200 text-xs font-medium text-slate-600 transition-colors cursor-pointer"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-[16px] text-[#7C3AED]">source</span>
+                              <span className="material-symbols-outlined text-[16px] text-violet-600">source</span>
                               <span>Retrieved Vector Sources ({msg.retrievedDocs.length} Chunks)</span>
                             </div>
-                            <span className="material-symbols-outlined text-[18px] text-[#64748B]">
+                            <span className="material-symbols-outlined text-[18px] text-slate-500">
                               {areDocsExpanded ? 'expand_less' : 'expand_more'}
                             </span>
                           </button>
@@ -1506,20 +1669,20 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                               {msg.retrievedDocs.map((doc) => (
                                 <div
                                   key={doc.id}
-                                  className="p-3 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-1.5 text-xs"
+                                  className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1.5 text-xs"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="font-semibold text-[#0F172A] font-mono text-[11px] truncate">
+                                    <span className="font-semibold text-slate-900 font-mono text-[11px] truncate">
                                       {doc.source}
                                     </span>
-                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]">
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       Sim: {doc.relevanceScore ?? 'Not available'}
                                     </span>
                                   </div>
-                                  <p className="text-[#334155] font-mono text-[11px] bg-white p-2 rounded-lg border border-[#E2E8F0] leading-relaxed break-words">
+                                  <p className="text-slate-700 font-mono text-[11px] bg-white p-2 rounded-lg border border-slate-200 leading-relaxed break-words">
                                     {doc.snippet}
                                   </p>
-                                  <div className="text-[10px] text-[#64748B]">
+                                  <div className="text-[10px] text-slate-500">
                                     Partition / Index: {doc.timestamp}
                                   </div>
                                 </div>
@@ -1531,14 +1694,14 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                     </div>
 
                     {/* Assistant Actions Bar */}
-                    <div className="flex items-center gap-1 text-xs text-[#64748B]">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-0.5">
                       <button
                         type="button"
                         onClick={() => {
                           navigator.clipboard?.writeText(msg.text || '');
                           showToast('Copied answer to clipboard');
                         }}
-                        className="px-2.5 py-1 rounded-lg hover:bg-[#F1F5F9] text-[#475569] hover:text-[#0F172A] flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[15px]">content_copy</span>
                         <span>Copy</span>
@@ -1547,7 +1710,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                       <button
                         type="button"
                         onClick={() => onNavigate('build-your-kpi-graph-studio')}
-                        className="px-2.5 py-1 rounded-lg hover:bg-[#EFF6FF] text-[#2563EB] hover:text-[#1D4ED8] flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 rounded-lg hover:bg-indigo-50 text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[15px]">query_stats</span>
                         <span>Open in Studio</span>
@@ -1556,7 +1719,7 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
                       <button
                         type="button"
                         onClick={() => showToast('Insight pinned to Executive Dashboard')}
-                        className="px-2.5 py-1 rounded-lg hover:bg-[#F1F5F9] text-[#475569] hover:text-[#0F172A] flex items-center gap-1 transition-colors"
+                        className="px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-[15px]">push_pin</span>
                         <span>Pin</span>
@@ -1570,18 +1733,18 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
 
           {/* Submitting / Retrieving State - only fallback if no streaming message in thread */}
           {isSubmitting && !messages.some(m => m.isStreaming) && (
-            <div className="flex items-start gap-3 max-w-2xl mr-auto animate-in fade-in">
-              <div className="w-8 h-8 rounded-xl bg-[#7C3AED] text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+            <div className="flex items-start gap-3.5 max-w-2xl mr-auto animate-in fade-in">
+              <div className="w-8.5 h-8.5 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-sky-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
               </div>
-              <div className="bg-[#F5F3FF] border border-[#DDD6FE] rounded-2xl rounded-tl-xs p-3.5 sm:p-4 text-xs text-[#5B21B6] space-y-2 shadow-2xs">
-                <div className="flex items-center gap-2 font-medium text-[#5B21B6]">
-                  <span className="material-symbols-outlined text-[18px] animate-spin text-[#7C3AED]">
+              <div className="bg-gradient-to-r from-violet-50/80 to-indigo-50/70 border border-violet-200/80 rounded-2xl rounded-tl-xs p-3.5 sm:p-4 text-xs text-indigo-950 space-y-2 shadow-2xs">
+                <div className="flex items-center gap-2 font-medium text-indigo-900">
+                  <span className="material-symbols-outlined text-[18px] animate-spin text-indigo-600">
                     progress_activity
                   </span>
                   <span>Retrieving context from SAP HANA in-memory vector store...</span>
                 </div>
-                <div className="flex items-center gap-2 text-[#6D28D9] pl-6 text-[11px]">
+                <div className="flex items-center gap-2 text-indigo-700 pl-6 text-[11px]">
                   <span>Cosine Match Score &gt; 0.90</span>
                   <span aria-hidden="true">·</span>
                   <span>Evaluating 3,248 partitions</span>
@@ -1594,42 +1757,54 @@ export const RAGChat: React.FC<RAGChatProps> = ({ onNavigate, isActive, onClose,
         </div>
 
         {/* ============================================================ */}
-        {/* CHAT INPUT AREA: Compact clean text box with Enter hint & send arrow */}
+        {/* CHAT INPUT AREA: Modern Enterprise Floating Dock (Claude 3.5 & Gemini Inspired) */}
         {/* ============================================================ */}
-        <div className="p-3 sm:px-6 bg-white border-t border-[#E2E8F0] shrink-0 z-10">
-          <div className="max-w-4xl mx-auto flex items-center gap-2 sm:gap-3 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl px-3.5 py-1.5 focus-within:border-[#7C3AED] focus-within:ring-2 focus-within:ring-[#7C3AED]/20 focus-within:bg-white transition-all shadow-2xs">
-            {/* Text input */}
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputText}
-              disabled={Boolean(loadingSessionId || sessionLoadError)}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              placeholder="Ask about the selected dataset, a metric, or a chart..."
-              className="flex-1 min-w-0 bg-transparent text-sm text-[#0F172A] placeholder:text-[#64748B] focus:outline-none py-1"
-            />
+        <div className="p-3 sm:pb-4 sm:px-6 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 z-20">
+          <div className="max-w-4xl mx-auto rounded-2xl bg-white border border-slate-200/90 shadow-[0_4px_24px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_30px_rgba(15,23,42,0.12)] focus-within:shadow-[0_6px_32px_rgba(99,102,241,0.16)] focus-within:border-indigo-400/90 focus-within:ring-2 focus-within:ring-indigo-400/20 transition-all p-2.5 sm:p-3">
+            {/* Input row */}
+            <div className="flex items-center gap-2 sm:gap-3 px-1">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputText}
+                disabled={Boolean(loadingSessionId || sessionLoadError)}
+                onChange={(e) => setInputText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ask about the selected dataset, calculate a metric, or request a chart..."
+                className="flex-1 min-w-0 bg-transparent text-sm sm:text-base text-slate-900 placeholder:text-slate-400 focus:outline-none py-1.5"
+              />
 
-            {/* Enter to send hint */}
-            <span className="hidden sm:inline text-[11px] text-[#64748B] font-mono select-none shrink-0 whitespace-nowrap">
-              Enter ↵ to send
-            </span>
+              {/* Modern Gradient Send Button */}
+              <button
+                type="button"
+                onClick={handleSendMessage}
+                disabled={isSubmitting || Boolean(loadingSessionId || sessionLoadError) || !inputText.trim()}
+                aria-label="Send message"
+                className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-600 to-indigo-700 hover:from-violet-700 hover:to-indigo-800 disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 text-white flex items-center justify-center transition-all disabled:opacity-60 disabled:cursor-not-allowed shrink-0 shadow-sm shadow-indigo-500/25 active:scale-95 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[19px]">arrow_upward</span>
+              </button>
+            </div>
 
-            {/* Send button with arrow */}
-            <button
-              type="button"
-              onClick={handleSendMessage}
-              disabled={isSubmitting || Boolean(loadingSessionId || sessionLoadError) || !inputText.trim()}
-              aria-label="Send message"
-              className="w-8 h-8 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] disabled:bg-[#E2E8F0] disabled:text-[#94A3B8] text-white flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 shadow-xs cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[17px]">arrow_upward</span>
-            </button>
+            {/* Metadata & Controls Bottom Row */}
+            <div className="flex items-center justify-between pt-2 mt-1 border-t border-slate-100 px-1 text-[11px] text-slate-400">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-slate-500 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>NVIDIA NIM · Grounded in SAP HANA Cloud</span>
+                </span>
+              </div>
+              <div className="hidden sm:flex items-center gap-2 text-slate-400">
+                <span>Press</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-mono text-slate-600 shadow-2xs">Enter ↵</kbd>
+                <span>to send</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
